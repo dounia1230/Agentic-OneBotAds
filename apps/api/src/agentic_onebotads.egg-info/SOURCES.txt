@@ -51,5 +51,6 @@ apps/api/src/onebot_ads/tools/rag_tools.py
 apps/api/src/onebot_ads/tools/reporting_tools.py
 tests/test_analytics_tools.py
 tests/test_assistant_orchestrator.py
+tests/test_campaign_copy_agent_prompt.py
 tests/test_campaign_service.py
 tests/test_health.py

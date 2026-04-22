@@ -82,19 +82,19 @@ class CampaignCopyAgent:
                         """
                         You are a senior performance marketer.
                         Return only valid JSON with this shape:
-                        {
+                        {{
                           "summary": "string",
                           "variants": [
-                            {
+                            {{
                               "channel": "string",
                               "headline": "string",
                               "primary_text": "string",
                               "cta": "string",
                               "rationale": "string"
-                            }
+                            }}
                           ],
                           "image_prompt": "string or null"
-                        }
+                        }}
                         Keep copy concrete, conversion-focused, and compliant with
                         the provided constraints.
                         """

@@ -1,0 +1,16 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&display=swap");
+
+:root {
+  color-scheme: dark;
+  --bg: #07111f;
+  --bg-strong: #040b15;
+  --ink: #eef6ff;
+  --ink-soft: #9db3ca;
+  --panel: rgba(10, 20, 35, 0.84);
+  --line: rgba(157, 179, 202, 0.16);
+  --accent: #4aa3ff;
+  --teal: #39c0d6;
+  --gold: #f4bf62;
+  --success: #41cf8b;
+  --shadow: 0 26px 70px rgba(0, 0, 0, 0.34);
+}

@@ -1,37 +1,25 @@
-import { render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, expect, test } from "vitest";
 
 import App from "./App";
 
-beforeEach(() => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => ({
-      ok: true,
-      json: async () => ({
-        app_name: "Agentic OneBotAds",
-        environment: "development",
-        api_prefix: "/api/v1",
-        ollama_base_url: "http://localhost:11434",
-        ollama_chat_model: "qwen3:8b",
-        ollama_embedding_model: "nomic-embed-text:latest",
-        rag_enabled: true,
-        image_generation_enabled: false,
-        image_provider: "diffusers",
-        knowledge_base_directory: "data/knowledge_base",
-        outputs_directory: "outputs",
-      }),
-      text: async () => "",
-    })),
-  );
-});
-
 afterEach(() => {
-  vi.unstubAllGlobals();
+  cleanup();
 });
 
-test("renders campaign control room heading", async () => {
+test("renders the workspace shell with accessible tabs", () => {
   render(<App />);
 
-  expect(screen.getByText(/Campaign Control Room/i)).toBeTruthy();
+  expect(screen.getByRole("heading", { name: /Operator Studio/i })).toBeTruthy();
+  expect(screen.getByRole("tab", { name: /Campaign Analysis/i }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByRole("button", { name: /Select campaign CSV/i })).toBeTruthy();
+});
+
+test("switches tabs and shows the selected workflow", () => {
+  render(<App />);
+
+  fireEvent.click(screen.getByRole("tab", { name: /Knowledge Base Q&A/i }));
+
+  expect(screen.getByRole("heading", { name: /Ask the local RAG workflow/i })).toBeTruthy();
+  expect(screen.getByRole("button", { name: /^Ask$/i })).toBeTruthy();
 });

@@ -49,7 +49,7 @@ python -m venv .venv
 pip install -r requirements.txt
 copy .env.example .env
 python rag/build_index.py
-python app.py
+python app.py --reload
 ```
 
 ## Backend on Linux or macOS
@@ -82,7 +82,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 python rag/build_index.py
-python app.py
+python app.py --reload
 ```
 
 If `python3.12` is unavailable, substitute `python3.11`.
@@ -148,5 +148,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/rag/reindex
 - Generated images stay under `outputs/images`.
 - Report exports stay under `outputs/reports`.
 - Chroma persistence stays under `vector_store/chroma`.
-- Pollinations is the default free image provider and does not require an API key.
-- To use Nano Banana, set `ENABLE_IMAGE_GENERATION=true`, `IMAGE_PROVIDER=nano_banana`, `IMAGE_MODEL=gemini-2.5-flash-image`, and `GEMINI_API_KEY=...`.
+- Qwen Image is the primary image provider.
+- To use image generation, set `ENABLE_IMAGE_GENERATION=true`, `IMAGE_PROVIDER=qwen_image`, and `QWEN_IMAGE_SPACE_ID=Qwen/Qwen-Image-2512`.
+- Optional fallback settings are `FLUX_IMAGE_SPACE_ID=black-forest-labs/FLUX.1-schnell`, `IMAGE_FALLBACK_PROVIDER=flux_schnell`, and `IMAGE_FALLBACK_ENABLED=true`.
+- `generate_image_prompt=true` only prepares the prompt payload. Actual cloud image generation requires `generate_image=true`.

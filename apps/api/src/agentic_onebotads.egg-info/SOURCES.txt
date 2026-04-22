@@ -48,6 +48,7 @@ apps/api/src/onebot_ads/tools/creative_tools.py
 apps/api/src/onebot_ads/tools/image_composer.py
 apps/api/src/onebot_ads/tools/image_tools.py
 apps/api/src/onebot_ads/tools/output_tools.py
+apps/api/src/onebot_ads/tools/path_tools.py
 apps/api/src/onebot_ads/tools/publication_tools.py
 apps/api/src/onebot_ads/tools/rag_tools.py
 apps/api/src/onebot_ads/tools/reporting_tools.py
@@ -57,3 +58,4 @@ tests/test_campaign_copy_agent_prompt.py
 tests/test_campaign_service.py
 tests/test_health.py
 tests/test_image_tools.py
+tests/test_root_app.py

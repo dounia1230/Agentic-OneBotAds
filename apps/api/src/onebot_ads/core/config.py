@@ -55,26 +55,24 @@ class Settings(BaseSettings):
     )
 
     enable_image_generation: bool = False
-    image_provider: str = "pollinations"
-    image_model: str = Field(
-        default="runwayml/stable-diffusion-v1-5",
-        validation_alias=AliasChoices("IMAGE_MODEL", "IMAGE_MODEL_ID"),
+    image_provider: str = "qwen_image"
+    qwen_image_space_id: str = Field(
+        default="Qwen/Qwen-Image-2512",
+        validation_alias="QWEN_IMAGE_SPACE_ID",
     )
-    gemini_api_key: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    flux_image_space_id: str = Field(
+        default="black-forest-labs/FLUX.1-schnell",
+        validation_alias="FLUX_IMAGE_SPACE_ID",
     )
-    gemini_api_base: str = Field(
-        default="https://generativelanguage.googleapis.com/v1beta",
-        validation_alias="GEMINI_API_BASE",
+    image_fallback_provider: str = Field(
+        default="flux_schnell",
+        validation_alias="IMAGE_FALLBACK_PROVIDER",
     )
-    pollinations_image_base_url: str = Field(
-        default="https://image.pollinations.ai/prompt",
-        validation_alias="POLLINATIONS_IMAGE_BASE_URL",
+    image_fallback_enabled: bool = Field(
+        default=True,
+        validation_alias="IMAGE_FALLBACK_ENABLED",
     )
-    pollinations_width: int = Field(default=1024, validation_alias="POLLINATIONS_WIDTH")
-    pollinations_height: int = Field(default=1024, validation_alias="POLLINATIONS_HEIGHT")
-    pollinations_nologo: bool = Field(default=True, validation_alias="POLLINATIONS_NOLOGO")
+    hf_token: str | None = Field(default=None, validation_alias="HF_TOKEN")
     outputs_directory: Path = PROJECT_ROOT / "outputs"
     output_image_dir: Path = Field(
         default=PROJECT_ROOT / "outputs" / "images",
@@ -87,6 +85,8 @@ class Settings(BaseSettings):
     output_post_dir: Path = PROJECT_ROOT / "outputs" / "posts"
 
     def model_post_init(self, __context: object) -> None:
+        self.image_provider = "qwen_image"
+        self.image_fallback_provider = "flux_schnell"
         self.chroma_path.mkdir(parents=True, exist_ok=True)
         self.knowledge_base_path.mkdir(parents=True, exist_ok=True)
         self.outputs_directory.mkdir(parents=True, exist_ok=True)
@@ -120,7 +120,7 @@ class Settings(BaseSettings):
 
     @property
     def image_model_id(self) -> str:
-        return self.image_model
+        return self.qwen_image_space_id
 
 
 @lru_cache

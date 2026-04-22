@@ -1,97 +1,50 @@
-import base64
 import json
 from pathlib import Path
 
-from onebot_ads.tools.image_tools import generate_ad_image, generate_background_image
+from gradio_client.exceptions import AppError
+
+from onebot_ads.tools.image_tools import (
+    FLUX_IMAGE_PROVIDER,
+    QWEN_IMAGE_PROVIDER,
+    _format_exception_details,
+    generate_ad_image,
+    generate_background_image,
+)
 from onebot_ads.tools.path_tools import to_outputs_url
 
 
-class _FakeResponse:
-    status_code = 200
-    text = '{"ok":true}'
-
-    def raise_for_status(self) -> None:
-        return None
-
-    def json(self) -> dict:
-        return {
-            "candidates": [
-                {
-                    "content": {
-                        "parts": [
-                            {
-                                "inlineData": {
-                                    "data": base64.b64encode(b"fake-image-bytes").decode(),
-                                    "mimeType": "image/png",
-                                }
-                            }
-                        ]
-                    }
-                }
-            ]
-        }
-
-
-def test_generate_ad_image_supports_nano_banana(monkeypatch, tmp_path: Path) -> None:
-    captured_request = {}
-
-    class StubSettings:
-        enable_image_generation = True
-        image_provider = "nano_banana"
-        image_model = "gemini-2.5-flash-image"
-        gemini_api_key = "test-key"
-        gemini_api_base = "https://generativelanguage.googleapis.com/v1beta"
-        llm_request_timeout_seconds = 90.0
-        output_image_dir = tmp_path
-        pollinations_width = 1024
-        pollinations_height = 1024
-
-    monkeypatch.setattr("onebot_ads.tools.image_tools.get_settings", lambda: StubSettings())
-
-    def fake_post(*args, **kwargs):
-        captured_request["json"] = kwargs["json"]
-        return _FakeResponse()
-
-    monkeypatch.setattr("onebot_ads.tools.image_tools.requests.post", fake_post)
-
-    result = generate_ad_image.invoke(
-        {
-            "prompt": "Create a campaign visual",
-            "negative_prompt": "blurry",
-            "aspect_ratio": "16:9",
-        }
-    )
-
-    assert result["status"] == "generated"
-    assert result["image_path"] is not None
-    assert Path(result["image_path"]).exists()
-    assert captured_request["json"]["generationConfig"]["responseModalities"] == ["Image"]
-
-
-def test_generate_ad_image_uses_preview_image_config_for_gemini_31(
+def test_generate_ad_image_uses_qwen_huggingface_space(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    captured_request = {}
+    captured = {}
+    generated_source = tmp_path / "hf-temp-image.png"
+    generated_source.write_bytes(b"fake-image-bytes")
 
     class StubSettings:
         enable_image_generation = True
-        image_provider = "nano_banana"
-        image_model = "gemini-3.1-flash-image-preview"
-        gemini_api_key = "test-key"
-        gemini_api_base = "https://generativelanguage.googleapis.com/v1beta"
-        llm_request_timeout_seconds = 90.0
+        image_provider = "qwen_image"
+        qwen_image_space_id = "Qwen/Qwen-Image-2512"
+        flux_image_space_id = "black-forest-labs/FLUX.1-schnell"
+        image_fallback_provider = "flux_schnell"
+        image_fallback_enabled = True
+        hf_token = None
         output_image_dir = tmp_path
-        pollinations_width = 1024
-        pollinations_height = 1024
+
+    class FakeClient:
+        def view_api(self, return_format="dict"):
+            return {"named_endpoints": {"/infer": {"parameters": []}}}
+
+        def predict(self, *args, **kwargs):
+            captured["args"] = args
+            captured["kwargs"] = kwargs
+            return [str(generated_source), 12345]
 
     monkeypatch.setattr("onebot_ads.tools.image_tools.get_settings", lambda: StubSettings())
-
-    def fake_post(*args, **kwargs):
-        captured_request["json"] = kwargs["json"]
-        return _FakeResponse()
-
-    monkeypatch.setattr("onebot_ads.tools.image_tools.requests.post", fake_post)
+    monkeypatch.setattr(
+        "onebot_ads.tools.image_tools._get_qwen_client",
+        lambda space_id, hf_token: FakeClient(),
+    )
 
     result = generate_ad_image.invoke(
         {
@@ -102,52 +55,294 @@ def test_generate_ad_image_uses_preview_image_config_for_gemini_31(
     )
 
     assert result["status"] == "generated"
-    assert captured_request["json"]["generationConfig"]["imageConfig"]["imageSize"] == "1K"
-    assert "responseModalities" not in captured_request["json"]["generationConfig"]
+    assert result["provider"] == "qwen_image"
+    assert result["backend"] == "huggingface_space"
+    assert result["space_id"] == "Qwen/Qwen-Image-2512"
+    assert result["image_path"] is not None
+    assert Path(result["image_path"]).exists()
+    assert captured["args"][:4] == (
+        "Create a campaign visual",
+        0,
+        True,
+        "16:9",
+    )
+    assert captured["kwargs"]["api_name"] == "/infer"
 
 
-def test_generate_background_image_supports_pollinations(monkeypatch, tmp_path: Path) -> None:
+def test_generate_background_image_normalizes_unsupported_provider(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    generated_source = tmp_path / "hf-temp-image.png"
+    generated_source.write_bytes(b"fake-image-bytes")
+
     class StubSettings:
         enable_image_generation = True
-        image_provider = "pollinations"
-        image_model = "unused"
-        gemini_api_key = None
-        gemini_api_base = "https://generativelanguage.googleapis.com/v1beta"
-        llm_request_timeout_seconds = 90.0
+        image_provider = "qwen_image"
+        qwen_image_space_id = "Qwen/Qwen-Image-2512"
+        flux_image_space_id = "black-forest-labs/FLUX.1-schnell"
+        image_fallback_provider = "flux_schnell"
+        image_fallback_enabled = True
+        hf_token = None
         output_image_dir = tmp_path
-        pollinations_image_base_url = "https://image.pollinations.ai/prompt"
-        pollinations_nologo = True
-        pollinations_width = 1024
-        pollinations_height = 1024
 
-    class FakePollinationsResponse:
-        status_code = 200
-        headers = {"Content-Type": "image/png"}
-        content = b"fake-image-content"
-        text = ""
+    class FakeClient:
+        def view_api(self, return_format="dict"):
+            return {"named_endpoints": {"/infer": {"parameters": []}}}
 
-        def json(self):
-            raise ValueError
+        def predict(self, *args, **kwargs):
+            return str(generated_source)
 
     monkeypatch.setattr("onebot_ads.tools.image_tools.get_settings", lambda: StubSettings())
     monkeypatch.setattr(
-        "onebot_ads.tools.image_tools.requests.get",
-        lambda *args, **kwargs: FakePollinationsResponse(),
+        "onebot_ads.tools.image_tools._get_qwen_client",
+        lambda space_id, hf_token: FakeClient(),
     )
 
     result = generate_background_image.invoke(
         {
             "prompt": "clean professional background",
             "provider": "pollinations",
-            "width": 1024,
-            "height": 1024,
+            "aspect_ratio": "1:1",
         }
     )
 
     assert result["status"] == "generated"
-    assert result["provider"] == "pollinations"
-    assert result["background_image_path"] is not None
-    assert Path(result["background_image_path"]).exists()
+    assert result["provider"] == "qwen_image"
+    assert result["notes"][0] == "Image provider normalized to qwen_image."
+
+
+def test_generate_background_image_returns_failure_when_qwen_errors(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    class StubSettings:
+        enable_image_generation = True
+        image_provider = "qwen_image"
+        qwen_image_space_id = "Qwen/Qwen-Image-2512"
+        flux_image_space_id = "black-forest-labs/FLUX.1-schnell"
+        image_fallback_provider = "flux_schnell"
+        image_fallback_enabled = False
+        hf_token = None
+        output_image_dir = tmp_path
+
+    class FakeClient:
+        def view_api(self, return_format="dict"):
+            return {"named_endpoints": {"/infer": {"parameters": []}}}
+
+        def predict(self, *args, **kwargs):
+            raise RuntimeError("Space unavailable")
+
+    monkeypatch.setattr("onebot_ads.tools.image_tools.get_settings", lambda: StubSettings())
+    monkeypatch.setattr(
+        "onebot_ads.tools.image_tools._get_qwen_client",
+        lambda space_id, hf_token: FakeClient(),
+    )
+
+    result = generate_background_image.invoke(
+        {
+            "prompt": "clean professional background",
+            "provider": "qwen_image",
+            "aspect_ratio": "1:1",
+        }
+    )
+
+    assert result["status"] == "generation_failed"
+    assert result["provider"] == "qwen_image"
+    assert result["image_path"] is None
+    assert "Space unavailable" in result["error"]
+
+
+def test_generate_background_image_uses_flux_fallback_when_qwen_fails(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    class StubSettings:
+        enable_image_generation = True
+        image_provider = "qwen_image"
+        qwen_image_space_id = "Qwen/Qwen-Image-2512"
+        flux_image_space_id = "black-forest-labs/FLUX.1-schnell"
+        image_fallback_provider = "flux_schnell"
+        image_fallback_enabled = True
+        hf_token = None
+        output_image_dir = tmp_path
+
+    fallback_path = tmp_path / "flux.png"
+    fallback_path.write_bytes(b"flux")
+
+    monkeypatch.setattr("onebot_ads.tools.image_tools.get_settings", lambda: StubSettings())
+    monkeypatch.setattr(
+        "onebot_ads.tools.image_tools.generate_qwen_image_background",
+        lambda **kwargs: {
+            "status": "generation_failed",
+            "provider": QWEN_IMAGE_PROVIDER,
+            "backend": "huggingface_space",
+            "space_id": "Qwen/Qwen-Image-2512",
+            "background_image_path": None,
+            "image_path": None,
+            "prompt": kwargs["prompt"],
+            "error": "GPU quota exceeded",
+            "notes": [],
+        },
+    )
+    monkeypatch.setattr(
+        "onebot_ads.tools.image_tools.generate_flux_schnell_background",
+        lambda **kwargs: {
+            "status": "generated",
+            "provider": FLUX_IMAGE_PROVIDER,
+            "backend": "huggingface_space",
+            "space_id": "black-forest-labs/FLUX.1-schnell",
+            "background_image_path": str(fallback_path),
+            "image_path": str(fallback_path),
+            "prompt": kwargs["prompt"],
+            "error": None,
+            "notes": [],
+        },
+    )
+
+    result = generate_background_image.invoke(
+        {
+            "prompt": "clean professional background",
+            "provider": "qwen_image",
+            "aspect_ratio": "16:9",
+        }
+    )
+
+    assert result["status"] == "generated"
+    assert result["provider"] == FLUX_IMAGE_PROVIDER
+    assert result["fallback_used"] is True
+    assert result["primary_provider"] == QWEN_IMAGE_PROVIDER
+    assert result["fallback_provider"] == FLUX_IMAGE_PROVIDER
+    assert "Attempting fallback provider flux_schnell." in result["notes"]
+
+
+def test_generate_background_image_returns_combined_failure_when_fallback_fails(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    class StubSettings:
+        enable_image_generation = True
+        image_provider = "qwen_image"
+        qwen_image_space_id = "Qwen/Qwen-Image-2512"
+        flux_image_space_id = "black-forest-labs/FLUX.1-schnell"
+        image_fallback_provider = "flux_schnell"
+        image_fallback_enabled = True
+        hf_token = None
+        output_image_dir = tmp_path
+
+    monkeypatch.setattr("onebot_ads.tools.image_tools.get_settings", lambda: StubSettings())
+    monkeypatch.setattr(
+        "onebot_ads.tools.image_tools.generate_qwen_image_background",
+        lambda **kwargs: {
+            "status": "generation_failed",
+            "provider": QWEN_IMAGE_PROVIDER,
+            "backend": "huggingface_space",
+            "space_id": "Qwen/Qwen-Image-2512",
+            "background_image_path": None,
+            "image_path": None,
+            "prompt": kwargs["prompt"],
+            "error": "rate limit",
+            "notes": [],
+        },
+    )
+    monkeypatch.setattr(
+        "onebot_ads.tools.image_tools.generate_flux_schnell_background",
+        lambda **kwargs: {
+            "status": "generation_failed",
+            "provider": FLUX_IMAGE_PROVIDER,
+            "backend": "huggingface_space",
+            "space_id": "black-forest-labs/FLUX.1-schnell",
+            "background_image_path": None,
+            "image_path": None,
+            "prompt": kwargs["prompt"],
+            "error": "provider unavailable",
+            "notes": [],
+        },
+    )
+
+    result = generate_background_image.invoke(
+        {
+            "prompt": "clean professional background",
+            "provider": "qwen_image",
+            "aspect_ratio": "16:9",
+        }
+    )
+
+    assert result["status"] == "generation_failed"
+    assert result["fallback_used"] is True
+    assert "Qwen failed: rate limit; FLUX fallback failed: provider unavailable" in result["error"]
+
+
+def test_format_exception_details_explains_opaque_upstream_app_errors() -> None:
+    details = _format_exception_details(
+        AppError("RuntimeError"),
+        provider=FLUX_IMAGE_PROVIDER,
+        include_repr=True,
+    )
+
+    assert "AppError: RuntimeError" in details
+    assert "upstream Hugging Face Space for flux_schnell failed internally" in details
+
+
+def test_get_qwen_client_uses_supported_token_parameter(monkeypatch) -> None:
+    from onebot_ads.tools.image_tools import _get_hf_space_client
+
+    captured = {}
+
+    class FakeClient:
+        def __init__(self, src, token=None, verbose=True, httpx_kwargs=None):
+            captured["src"] = src
+            captured["token"] = token
+            captured["verbose"] = verbose
+            captured["httpx_kwargs"] = httpx_kwargs
+
+    _get_hf_space_client.cache_clear()
+    monkeypatch.setattr("onebot_ads.tools.image_tools._load_client_class", lambda: FakeClient)
+
+    client = _get_hf_space_client("Qwen/Qwen-Image-2512", "test-token")
+
+    assert isinstance(client, FakeClient)
+    assert captured == {
+        "src": "Qwen/Qwen-Image-2512",
+        "token": "test-token",
+        "verbose": False,
+        "httpx_kwargs": {"timeout": 120.0},
+    }
+
+
+def test_generate_qwen_image_background_uses_integer_seed(monkeypatch, tmp_path: Path) -> None:
+    from onebot_ads.tools.image_tools import generate_qwen_image_background
+
+    captured = {}
+    generated_source = tmp_path / "hf-temp-image.png"
+    generated_source.write_bytes(b"fake-image-bytes")
+
+    class StubSettings:
+        qwen_image_space_id = "Qwen/Qwen-Image-2512"
+        flux_image_space_id = "black-forest-labs/FLUX.1-schnell"
+        image_fallback_provider = "flux_schnell"
+        image_fallback_enabled = True
+        hf_token = None
+
+    class FakeClient:
+        def view_api(self, return_format="dict"):
+            return {"named_endpoints": {"/infer": {"parameters": []}}}
+
+        def predict(self, *args, **kwargs):
+            captured["args"] = args
+            captured["kwargs"] = kwargs
+            return [str(generated_source), 12345]
+
+    monkeypatch.setattr("onebot_ads.tools.image_tools.get_settings", lambda: StubSettings())
+    monkeypatch.setattr("onebot_ads.tools.image_tools._get_qwen_client", lambda *args: FakeClient())
+
+    result = generate_qwen_image_background(
+        prompt="clean abstract background",
+        output_dir=str(tmp_path),
+    )
+
+    assert result["status"] == "generated"
+    assert captured["args"][1] == 0
 
 
 def test_saved_output_bundle_contains_saved_path(tmp_path: Path) -> None:

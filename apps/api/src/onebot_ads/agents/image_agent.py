@@ -48,6 +48,12 @@ Return:
 """.strip()
 
 
+def _format_exception_details(exc: Exception) -> str:
+    exception_name = type(exc).__name__
+    exception_message = str(exc).strip()
+    return f"{exception_name}: {exception_message}" if exception_message else exception_name
+
+
 class ImageGenerationAgent:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -77,26 +83,59 @@ class ImageGenerationAgent:
         background_image_path = None
         publication_image_path = None
         image_path = None
-        resolved_provider = (provider or self.settings.image_provider).lower()
-        status = "prompt_only"
+        requested_provider = (provider or self.settings.image_provider).lower()
+        resolved_provider = "qwen_image"
+        if requested_provider != resolved_provider:
+            notes.append("Image provider normalized to qwen_image.")
+        backend = "huggingface_space"
+        space_id = self.settings.qwen_image_space_id
+        status = "prompt_ready"
         error = None
+        fallback_used = False
+        fallback_attempted = False
+        fallback_succeeded = False
+        primary_provider = resolved_provider
+        fallback_provider = self.settings.image_fallback_provider
 
         if request_image_generation and self.settings.enable_image_generation:
-            generation = generate_background_image.invoke(
-                {
-                    "prompt": image_spec["prompt"],
+            try:
+                generation = generate_background_image.invoke(
+                    {
+                        "prompt": image_spec["prompt"],
+                        "provider": resolved_provider,
+                        "negative_prompt": image_spec["negative_prompt"],
+                        "aspect_ratio": aspect_ratio,
+                    }
+                )
+            except Exception as exc:
+                generation = {
+                    "status": "generation_failed",
                     "provider": resolved_provider,
-                    "width": self.settings.pollinations_width,
-                    "height": self.settings.pollinations_height,
-                    "negative_prompt": image_spec["negative_prompt"],
-                    "aspect_ratio": aspect_ratio,
+                    "backend": backend,
+                    "space_id": space_id,
+                    "background_image_path": None,
+                    "image_path": None,
+                    "error": _format_exception_details(exc),
+                    "notes": ["Image generation failed before a provider response was returned."],
+                    "fallback_used": False,
+                    "fallback_attempted": False,
+                    "fallback_succeeded": False,
+                    "primary_provider": primary_provider,
+                    "fallback_provider": fallback_provider,
                 }
-            )
             background_image_path = generation.get("background_image_path")
             image_path = generation.get("image_path")
             status = generation.get("status", "not_generated")
             error = generation.get("error")
             notes.extend(generation.get("notes", []))
+            resolved_provider = generation.get("provider", resolved_provider)
+            backend = generation.get("backend", backend)
+            space_id = generation.get("space_id", space_id)
+            fallback_used = generation.get("fallback_used", False)
+            fallback_attempted = generation.get("fallback_attempted", False)
+            fallback_succeeded = generation.get("fallback_succeeded", False)
+            primary_provider = generation.get("primary_provider", primary_provider)
+            fallback_provider = generation.get("fallback_provider", fallback_provider)
 
             if (
                 compose_publication_image_flag
@@ -104,13 +143,16 @@ class ImageGenerationAgent:
                 and headline
                 and cta
             ):
-                composition = compose_publication_image(
-                    background_path=background_image_path,
-                    headline=headline,
-                    cta=cta,
-                    product_name=product_name,
-                    output_dir=str(self.settings.output_image_dir),
-                )
+                try:
+                    composition = compose_publication_image(
+                        background_path=background_image_path,
+                        headline=headline,
+                        cta=cta,
+                        product_name=product_name,
+                        output_dir=str(self.settings.output_image_dir),
+                    )
+                except Exception as exc:
+                    composition = {"status": "composition_failed", "error": str(exc)}
                 publication_image_path = composition.get("image_path")
                 if composition["status"] == "composed" and publication_image_path:
                     status = "composed"
@@ -119,14 +161,17 @@ class ImageGenerationAgent:
                     error = composition.get("error")
                     notes.append(f"Composition failed: {composition.get('error')}")
         elif request_image_generation and not self.settings.enable_image_generation:
-            status = "disabled"
-            notes.append("Image generation is disabled in configuration.")
+            status = "generation_failed"
+            error = "Image generation is disabled in configuration."
+            notes.append("Fallback was not attempted because image generation is disabled.")
 
         return ImageGenerationResponse(
             image_prompt=image_spec["prompt"],
             negative_prompt=image_spec["negative_prompt"],
             alt_text=image_spec["alt_text"],
             provider=resolved_provider,
+            backend=backend,
+            space_id=space_id,
             background_image_path=background_image_path,
             publication_image_path=publication_image_path,
             image_path=image_path,
@@ -134,4 +179,9 @@ class ImageGenerationAgent:
             status=status,
             error=error,
             notes=notes,
+            fallback_used=fallback_used,
+            fallback_attempted=fallback_attempted,
+            fallback_succeeded=fallback_succeeded,
+            primary_provider=primary_provider,
+            fallback_provider=fallback_provider,
         )

@@ -21,14 +21,14 @@ ollama pull qwen3:8b
 ollama pull nomic-embed-text:latest
 
 python rag/build_index.py
-python app.py
+python app.py --reload
 ```
 
 `python rag/build_index.py` calls the backend `onebot_ads.rag.build_index` module and writes vectors into `vector_store/chroma`.
 
 ## Query The Index
 
-- CLI path: ask a brand/product/tone question in `python app.py`.
+- CLI path: ask a brand/product/tone question in `python app.py cli`.
 - API path: `POST /api/v1/assistant/run` or `POST /api/v1/rag/reindex` after changing files.
 - Internal code path: `onebot_ads.rag.query_engine.get_query_engine()`.
 

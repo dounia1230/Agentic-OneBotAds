@@ -1,5 +1,24 @@
 # API Contracts
 
+## Runtime Summary
+
+```json
+{
+  "app_name": "Agentic OneBotAds",
+  "environment": "development",
+  "api_prefix": "/api/v1",
+  "ollama_base_url": "http://localhost:11434",
+  "ollama_chat_model": "qwen3:8b",
+  "ollama_embedding_model": "nomic-embed-text:latest",
+  "rag_enabled": true,
+  "image_generation_enabled": true,
+  "image_provider": "qwen_image",
+  "image_model": "Qwen/Qwen-Image-2512",
+  "knowledge_base_directory": "data/knowledge_base",
+  "outputs_directory": "outputs"
+}
+```
+
 ## Campaign Analysis
 
 ```json

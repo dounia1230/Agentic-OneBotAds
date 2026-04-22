@@ -1,6 +1,8 @@
+from pathlib import Path
+
 from onebot_ads.agents.campaign_copy_agent import CampaignCopyAgent
 from onebot_ads.agents.orchestrator_agent import OrchestratorAgent
-from onebot_ads.core.config import Settings
+from onebot_ads.core.config import PROJECT_ROOT, Settings
 from onebot_ads.rag.knowledge_base import KnowledgeBaseService
 from onebot_ads.schemas.campaigns import (
     AssistantResponse,
@@ -9,7 +11,7 @@ from onebot_ads.schemas.campaigns import (
     ReindexResponse,
     RuntimeSummary,
 )
-from onebot_ads.tools.output_tools import save_assistant_output
+from onebot_ads.tools.output_tools import build_assistant_output_path, save_assistant_output
 
 
 class CampaignService:
@@ -39,24 +41,14 @@ class CampaignService:
             run_all_agents=run_all_agents,
             export_report=export_report,
         )
-
-        artifact_paths: list[str] = []
-        if result.image and result.image.image_path:
-            artifact_paths.append(result.image.image_path)
-        if result.report and result.report.report_path:
-            artifact_paths.append(result.report.report_path)
+        result.artifact_paths = self._collect_artifact_paths(result)
 
         if save_output:
-            saved_output_path = save_assistant_output(
-                result,
+            result.saved_output_path = build_assistant_output_path(
                 user_message,
                 settings=self.settings,
             )
-            result.saved_output_path = saved_output_path
-            artifact_paths.append(saved_output_path)
-
-        result.artifact_paths = artifact_paths
-        if save_output and result.saved_output_path:
+            result.artifact_paths.append(result.saved_output_path)
             save_assistant_output(
                 result,
                 user_message,
@@ -79,7 +71,24 @@ class CampaignService:
             rag_enabled=self.settings.enable_rag,
             image_generation_enabled=self.settings.enable_image_generation,
             image_provider=self.settings.image_provider,
-            image_model=self.settings.image_model,
-            knowledge_base_directory=str(self.settings.knowledge_base_path),
-            outputs_directory=str(self.settings.outputs_directory),
+            image_model=self.settings.qwen_image_space_id,
+            knowledge_base_directory=self._serialize_runtime_path(self.settings.knowledge_base_path),
+            outputs_directory=self._serialize_runtime_path(self.settings.outputs_directory),
         )
+
+    @staticmethod
+    def _serialize_runtime_path(path: Path) -> str:
+        if not path.is_absolute():
+            return path.as_posix()
+        try:
+            return path.relative_to(PROJECT_ROOT).as_posix()
+        except ValueError:
+            return path.as_posix()
+
+    def _collect_artifact_paths(self, result: AssistantResponse) -> list[str]:
+        artifact_paths: list[str] = []
+        if result.image and result.image.image_path:
+            artifact_paths.append(result.image.image_path)
+        if result.report and result.report.report_path:
+            artifact_paths.append(result.report.report_path)
+        return artifact_paths

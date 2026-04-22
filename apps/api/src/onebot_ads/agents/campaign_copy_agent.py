@@ -36,6 +36,12 @@ UNSUPPORTED_PATTERN_REPLACEMENTS = [
 ]
 
 
+def _format_exception_details(exc: Exception) -> str:
+    exception_name = type(exc).__name__
+    exception_message = str(exc).strip()
+    return f"{exception_name}: {exception_message}" if exception_message else exception_name
+
+
 class _DraftVariantPayload(BaseModel):
     channel: str
     headline: str
@@ -283,42 +289,78 @@ class CampaignCopyAgent:
         brief: CampaignBrief,
         variants: list[AdVariant],
     ) -> ImagePrompt:
-        provider = (brief.image_provider or self.settings.image_provider).lower()
+        requested_provider = (brief.image_provider or self.settings.image_provider).lower()
+        provider = "qwen_image"
         image_spec = build_publication_background_prompt(
             product_name=brief.product_name,
             audience=brief.audience,
             platform="/".join(brief.channels) if brief.channels else "linkedin",
         )
         notes: list[str] = []
+        if requested_provider != provider:
+            notes.append("Image provider normalized to qwen_image.")
         background_path = None
         publication_path = None
-        status = "prompt_only"
+        status = "prompt_ready"
         error = None
+        fallback_used = False
+        fallback_attempted = False
+        fallback_succeeded = False
+        primary_provider = provider
+        fallback_provider = self.settings.image_fallback_provider
+        backend = "huggingface_space"
+        space_id = self.settings.qwen_image_space_id
 
         if brief.generate_image:
-            generation = generate_background_image.invoke(
-                {
-                    "prompt": image_spec["prompt"],
+            try:
+                generation = generate_background_image.invoke(
+                    {
+                        "prompt": image_spec["prompt"],
+                        "provider": provider,
+                        "negative_prompt": image_spec["negative_prompt"],
+                        "aspect_ratio": "16:9" if "linkedin" in brief.channels else "1:1",
+                    }
+                )
+            except Exception as exc:
+                generation = {
+                    "status": "generation_failed",
                     "provider": provider,
-                    "width": self.settings.pollinations_width,
-                    "height": self.settings.pollinations_height,
-                    "negative_prompt": image_spec["negative_prompt"],
-                    "aspect_ratio": "16:9" if "linkedin" in brief.channels else "1:1",
+                    "backend": backend,
+                    "space_id": space_id,
+                    "background_image_path": None,
+                    "image_path": None,
+                    "error": _format_exception_details(exc),
+                    "notes": ["Image generation failed before a provider response was returned."],
+                    "fallback_used": False,
+                    "fallback_attempted": False,
+                    "fallback_succeeded": False,
+                    "primary_provider": provider,
+                    "fallback_provider": fallback_provider,
                 }
-            )
             status = generation["status"]
             background_path = generation.get("background_image_path")
             error = generation.get("error")
             notes.extend(generation.get("notes", []))
+            provider = generation.get("provider", provider)
+            backend = generation.get("backend", backend)
+            space_id = generation.get("space_id", space_id)
+            fallback_used = generation.get("fallback_used", False)
+            fallback_attempted = generation.get("fallback_attempted", False)
+            fallback_succeeded = generation.get("fallback_succeeded", False)
+            primary_provider = generation.get("primary_provider", primary_provider)
+            fallback_provider = generation.get("fallback_provider", fallback_provider)
 
             if brief.compose_publication_image and background_path and variants:
-                composition = compose_publication_image(
-                    background_path=background_path,
-                    headline=variants[0].headline,
-                    cta=variants[0].cta,
-                    product_name=brief.product_name,
-                    output_dir=str(self.settings.output_image_dir),
-                )
+                try:
+                    composition = compose_publication_image(
+                        background_path=background_path,
+                        headline=variants[0].headline,
+                        cta=variants[0].cta,
+                        product_name=brief.product_name,
+                        output_dir=str(self.settings.output_image_dir),
+                    )
+                except Exception as exc:
+                    composition = {"status": "composition_failed", "error": str(exc)}
                 publication_path = composition.get("image_path")
                 if composition["status"] == "composed" and publication_path:
                     status = "composed"
@@ -331,6 +373,8 @@ class CampaignCopyAgent:
         return ImagePrompt(
             prompt=image_spec["prompt"],
             provider=provider,
+            backend=backend,
+            space_id=space_id,
             negative_prompt=image_spec["negative_prompt"],
             status=status,
             background_image_path=background_path,
@@ -340,6 +384,11 @@ class CampaignCopyAgent:
             alt_text=image_spec["alt_text"],
             error=error,
             notes=notes,
+            fallback_used=fallback_used,
+            fallback_attempted=fallback_attempted,
+            fallback_succeeded=fallback_succeeded,
+            primary_provider=primary_provider,
+            fallback_provider=fallback_provider,
         )
 
     def _sanitize_variant(

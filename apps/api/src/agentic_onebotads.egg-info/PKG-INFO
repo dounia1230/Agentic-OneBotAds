@@ -5,10 +5,9 @@ Summary: Local-first agentic ad generation backend for Agentic OneBotAds.
 Requires-Python: <3.13,>=3.11
 Description-Content-Type: text/markdown
 Requires-Dist: chromadb>=1.0.0
-Requires-Dist: diffusers>=0.32.0
 Requires-Dist: fastapi>=0.115.0
+Requires-Dist: gradio_client>=1.12.0
 Requires-Dist: httpx>=0.27.0
-Requires-Dist: accelerate>=1.2.0
 Requires-Dist: langchain>=0.3.0
 Requires-Dist: langchain-community>=0.3.0
 Requires-Dist: langchain-ollama>=0.2.0
@@ -23,9 +22,6 @@ Requires-Dist: python-dotenv>=1.0.0
 Requires-Dist: python-multipart>=0.0.9
 Requires-Dist: pillow>=10.4.0
 Requires-Dist: requests>=2.32.0
-Requires-Dist: safetensors>=0.4.5
-Requires-Dist: torch>=2.5.0
-Requires-Dist: transformers>=4.47.0
 Requires-Dist: uvicorn[standard]>=0.30.0
 Provides-Extra: dev
 Requires-Dist: pytest>=8.3.0; extra == "dev"
@@ -43,7 +39,7 @@ Agentic OneBotAds is a local-first multi-agent advertising assistant. It retriev
 - LangChain for prompt orchestration and tool wrappers
 - LlamaIndex plus ChromaDB for persistent RAG
 - Ollama with `qwen3:8b` and `nomic-embed-text:latest`
-- Optional Diffusers-based image generation
+- Qwen Image via the Hugging Face Space `Qwen/Qwen-Image-2512`
 
 ## Repo Shape
 
@@ -84,7 +80,7 @@ python -m venv .venv
 pip install -r requirements.txt
 copy .env.example .env
 python rag/build_index.py
-python app.py
+python app.py --reload
 ```
 
 ### Backend on Linux or macOS
@@ -117,7 +113,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 python rag/build_index.py
-python app.py
+python app.py --reload
 ```
 
 If `python3.12` is not available, use `python3.11` instead. On Bazzite, Homebrew or a dev container is usually the easiest way to add a compatible Python version.
@@ -162,14 +158,15 @@ Frontend runs on `http://localhost:5173`. Backend runs on `http://127.0.0.1:8000
 
 ### Image Provider Options
 
-- `IMAGE_PROVIDER=pollinations` is the default free MVP path for clean background generation.
-- `IMAGE_PROVIDER=diffusers` with `IMAGE_MODEL=runwayml/stable-diffusion-v1-5` keeps image generation local.
-- `IMAGE_PROVIDER=nano_banana` with `IMAGE_MODEL=gemini-2.5-flash-image` uses Gemini Image through Google's API.
-- For Nano Banana, set `GEMINI_API_KEY` in `.env`.
+- `IMAGE_PROVIDER=qwen_image` is the only supported image backend.
+- The app calls the Hugging Face Space `Qwen/Qwen-Image-2512` through `gradio_client`.
+- Set `HF_TOKEN` in `.env` only if the Space needs authenticated access or you hit rate limits.
 - Publication visuals are composed in code: the provider generates the background, then Pillow overlays readable text.
+- Generated images are saved under `outputs/images` and served by FastAPI at `/outputs/images/...`.
 
 ## Example CLI Requests
 
+- Start the CLI explicitly with `python app.py cli`
 - `Analyze my campaigns.`
 - `Create a LinkedIn publication with image for Agentic OneBotAds targeting SMEs.`
 - `What tone should I use for OneBotAds ads?`
@@ -202,7 +199,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/campaigns/draft \
     "generate_image_prompt": true,
     "generate_image": true,
     "compose_publication_image": true,
-    "image_provider": "pollinations"
+    "image_provider": "qwen_image"
   }'
 ```
 

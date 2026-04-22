@@ -8,7 +8,7 @@ Agentic OneBotAds is a local-first multi-agent advertising assistant. It retriev
 - LangChain for prompt orchestration and tool wrappers
 - LlamaIndex plus ChromaDB for persistent RAG
 - Ollama with `qwen3:8b` and `nomic-embed-text:latest`
-- Optional Diffusers-based image generation
+- Qwen Image via the Hugging Face Space `Qwen/Qwen-Image-2512`
 
 ## Repo Shape
 
@@ -49,7 +49,7 @@ python -m venv .venv
 pip install -r requirements.txt
 copy .env.example .env
 python rag/build_index.py
-python app.py
+python app.py --reload
 ```
 
 ### Backend on Linux or macOS
@@ -82,7 +82,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 python rag/build_index.py
-python app.py
+python app.py --reload
 ```
 
 If `python3.12` is not available, use `python3.11` instead. On Bazzite, Homebrew or a dev container is usually the easiest way to add a compatible Python version.
@@ -127,15 +127,17 @@ Frontend runs on `http://localhost:5173`. Backend runs on `http://127.0.0.1:8000
 
 ### Image Provider Options
 
-- `IMAGE_PROVIDER=pollinations` is the default free MVP path for clean background generation.
-- `IMAGE_PROVIDER=diffusers` with `IMAGE_MODEL=runwayml/stable-diffusion-v1-5` keeps image generation local.
-- `IMAGE_PROVIDER=nano_banana` with `IMAGE_MODEL=gemini-2.5-flash-image` uses Gemini Image through Google's API.
-- For Nano Banana, set `GEMINI_API_KEY` in `.env`.
-- Publication visuals are composed in code: the provider generates the background, then Pillow overlays readable text.
+- `IMAGE_PROVIDER=qwen_image` remains the primary image backend.
+- The app calls the Hugging Face Space `Qwen/Qwen-Image-2512` first and can fall back to `black-forest-labs/FLUX.1-schnell`.
+- Configure fallback with `FLUX_IMAGE_SPACE_ID`, `IMAGE_FALLBACK_PROVIDER=flux_schnell`, and `IMAGE_FALLBACK_ENABLED=true`.
+- `generate_image_prompt=true` only returns prompt metadata. Cloud generation only runs when `generate_image=true`.
+- Set `HF_TOKEN` in `.env` only if the Space needs authenticated access or you hit rate limits.
+- Publication visuals are composed in code only after a background image is generated.
 - Generated images are saved under `outputs/images` and served by FastAPI at `/outputs/images/...`.
 
 ## Example CLI Requests
 
+- Start the CLI explicitly with `python app.py cli`
 - `Analyze my campaigns.`
 - `Create a LinkedIn publication with image for Agentic OneBotAds targeting SMEs.`
 - `What tone should I use for OneBotAds ads?`
@@ -168,7 +170,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/campaigns/draft \
     "generate_image_prompt": true,
     "generate_image": true,
     "compose_publication_image": true,
-    "image_provider": "pollinations"
+    "image_provider": "qwen_image"
   }'
 ```
 

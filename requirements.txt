@@ -17,9 +17,5 @@ pydantic-settings
 python-dotenv
 requests
 pillow
-torch
-diffusers
-transformers
-accelerate
-safetensors
+gradio_client
 httpx

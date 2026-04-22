@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from onebot_ads.api.router import api_router
 from onebot_ads.core.config import get_settings
@@ -19,6 +20,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.mount("/outputs", StaticFiles(directory=str(settings.outputs_directory)), name="outputs")
     app.include_router(api_router, prefix=settings.api_prefix)
     return app
 

@@ -55,11 +55,26 @@ class Settings(BaseSettings):
     )
 
     enable_image_generation: bool = False
-    image_provider: str = "diffusers"
+    image_provider: str = "pollinations"
     image_model: str = Field(
         default="runwayml/stable-diffusion-v1-5",
         validation_alias=AliasChoices("IMAGE_MODEL", "IMAGE_MODEL_ID"),
     )
+    gemini_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    )
+    gemini_api_base: str = Field(
+        default="https://generativelanguage.googleapis.com/v1beta",
+        validation_alias="GEMINI_API_BASE",
+    )
+    pollinations_image_base_url: str = Field(
+        default="https://image.pollinations.ai/prompt",
+        validation_alias="POLLINATIONS_IMAGE_BASE_URL",
+    )
+    pollinations_width: int = Field(default=1024, validation_alias="POLLINATIONS_WIDTH")
+    pollinations_height: int = Field(default=1024, validation_alias="POLLINATIONS_HEIGHT")
+    pollinations_nologo: bool = Field(default=True, validation_alias="POLLINATIONS_NOLOGO")
     outputs_directory: Path = PROJECT_ROOT / "outputs"
     output_image_dir: Path = Field(
         default=PROJECT_ROOT / "outputs" / "images",

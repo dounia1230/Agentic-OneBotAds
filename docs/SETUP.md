@@ -148,3 +148,5 @@ curl -X POST http://127.0.0.1:8000/api/v1/rag/reindex
 - Generated images stay under `outputs/images`.
 - Report exports stay under `outputs/reports`.
 - Chroma persistence stays under `vector_store/chroma`.
+- Pollinations is the default free image provider and does not require an API key.
+- To use Nano Banana, set `ENABLE_IMAGE_GENERATION=true`, `IMAGE_PROVIDER=nano_banana`, `IMAGE_MODEL=gemini-2.5-flash-image`, and `GEMINI_API_KEY=...`.

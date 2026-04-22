@@ -7,6 +7,7 @@ from onebot_ads.schemas.campaigns import (
     PublicationPackage,
 )
 from onebot_ads.tools.creative_tools import normalize_platform
+from onebot_ads.tools.path_tools import to_outputs_url
 from onebot_ads.tools.publication_tools import recommended_schedule_for_platform
 
 SYSTEM_PROMPT = """
@@ -63,6 +64,13 @@ class PublicationAgent:
                 item.recommendation for item in optimization.strategic_changes[:1]
             )
 
+        resolved_image_path = (
+            image.publication_image_path
+            or image.image_path
+            or image.background_image_path
+            if image
+            else None
+        )
         return PublicationPackage(
             platform=resolved_platform,
             headline=compliance.final_safe_version.headline,
@@ -70,7 +78,8 @@ class PublicationAgent:
             cta=creative.cta,
             hashtags=creative.hashtags,
             image_prompt=image.image_prompt if image else None,
-            image_path=image.image_path if image else None,
+            image_path=resolved_image_path,
+            image_url=to_outputs_url(resolved_image_path),
             alt_text=image.alt_text if image else None,
             recommended_schedule=recommended_schedule_for_platform(resolved_platform),
             compliance_status="approved" if compliance.approved else "needs_revision",

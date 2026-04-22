@@ -13,6 +13,9 @@ class CampaignBrief(BaseModel):
     landing_page_url: HttpUrl | None = None
     source_context_query: str | None = Field(default=None, max_length=240)
     generate_image_prompt: bool = True
+    generate_image: bool = False
+    compose_publication_image: bool = False
+    image_provider: str | None = Field(default=None, max_length=80)
 
     @field_validator("channels")
     @classmethod
@@ -30,6 +33,15 @@ class ContextSnippet(BaseModel):
 class ImagePrompt(BaseModel):
     prompt: str
     provider: str
+    negative_prompt: str | None = None
+    status: str = "prompt_only"
+    background_image_path: str | None = None
+    publication_image_path: str | None = None
+    image_path: str | None = None
+    image_url: str | None = None
+    alt_text: str | None = None
+    error: str | None = None
+    notes: list[str] = Field(default_factory=list)
 
 
 class AdVariant(BaseModel):
@@ -47,7 +59,9 @@ class CampaignDraftResponse(BaseModel):
     variants: list[AdVariant]
     image_prompt: ImagePrompt | None = None
     used_context: list[ContextSnippet] = Field(default_factory=list)
+    compliance_issues: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    status: str = "ready_for_review"
 
 
 class RuntimeSummary(BaseModel):
@@ -60,6 +74,7 @@ class RuntimeSummary(BaseModel):
     rag_enabled: bool
     image_generation_enabled: bool
     image_provider: str
+    image_model: str
     knowledge_base_directory: str
     outputs_directory: str
 
@@ -86,6 +101,9 @@ class OrchestrationPlan(BaseModel):
 
 class AssistantRequest(BaseModel):
     message: str = Field(min_length=3)
+    run_all_agents: bool = False
+    save_output: bool = False
+    export_report: bool = False
 
 
 class RAGAgentResponse(BaseModel):
@@ -132,8 +150,13 @@ class ImageGenerationResponse(BaseModel):
     image_prompt: str
     negative_prompt: str
     alt_text: str
+    provider: str
+    background_image_path: str | None = None
+    publication_image_path: str | None = None
     image_path: str | None = None
+    image_url: str | None = None
     status: str
+    error: str | None = None
     notes: list[str] = Field(default_factory=list)
 
 
@@ -169,6 +192,7 @@ class PublicationPackage(BaseModel):
     hashtags: list[str] = Field(default_factory=list)
     image_prompt: str | None = None
     image_path: str | None = None
+    image_url: str | None = None
     alt_text: str | None = None
     recommended_schedule: str
     compliance_status: str
@@ -198,4 +222,6 @@ class AssistantResponse(BaseModel):
     compliance: ComplianceReviewResponse | None = None
     publication: PublicationPackage | None = None
     report: ReportSummary | None = None
+    saved_output_path: str | None = None
+    artifact_paths: list[str] = Field(default_factory=list)
     status: str = "ready_for_review"

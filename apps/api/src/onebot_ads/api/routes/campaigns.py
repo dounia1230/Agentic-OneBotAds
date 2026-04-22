@@ -23,7 +23,12 @@ def draft_campaign(brief: CampaignBrief, service: CampaignServiceDep) -> Campaig
 
 @router.post("/assistant/run", response_model=AssistantResponse)
 def run_assistant(request: AssistantRequest, service: CampaignServiceDep) -> AssistantResponse:
-    return service.handle_request(request.message)
+    return service.handle_request(
+        request.message,
+        run_all_agents=request.run_all_agents,
+        save_output=request.save_output,
+        export_report=request.export_report,
+    )
 
 
 @router.post("/rag/reindex", response_model=ReindexResponse)

@@ -87,6 +87,7 @@ class RequestContext:
     wants_image_prompt: bool
     wants_image_generation: bool
     wants_report_export: bool
+    run_all_agents: bool
 
 
 class OrchestratorAgent:
@@ -106,10 +107,24 @@ class OrchestratorAgent:
         self.publication_agent = PublicationAgent(settings)
         self.reporting_agent = ReportingAgent(settings)
 
-    def run(self, user_message: str) -> AssistantResponse:
-        context = self._build_request_context(user_message)
-        plan = self._build_plan(context.intent, context.wants_image_prompt)
-        response = AssistantResponse(intent=context.intent, plan=plan)
+    def run(
+        self,
+        user_message: str,
+        *,
+        run_all_agents: bool = False,
+        export_report: bool = False,
+    ) -> AssistantResponse:
+        context = self._build_request_context(
+            user_message,
+            run_all_agents=run_all_agents,
+            export_report=export_report,
+        )
+        plan = self._build_plan(
+            context.intent,
+            context.wants_image_prompt,
+            run_all_agents=context.run_all_agents,
+        )
+        response = AssistantResponse(intent=plan.intent, plan=plan)
 
         rag_result = None
         analysis_result = None
@@ -148,6 +163,10 @@ class OrchestratorAgent:
                     "clean product storytelling"
                 ),
                 request_image_generation=context.wants_image_generation,
+                headline=creative_result.headline if creative_result else None,
+                cta=creative_result.cta if creative_result else None,
+                compose_publication_image_flag=True,
+                provider=self.settings.image_provider,
             )
             response.image = image_result
         if "optimization_agent" in plan.agents_to_call:
@@ -181,7 +200,28 @@ class OrchestratorAgent:
 
         return response
 
-    def _build_plan(self, intent: str, wants_image_prompt: bool) -> OrchestrationPlan:
+    def _build_plan(
+        self,
+        intent: str,
+        wants_image_prompt: bool,
+        *,
+        run_all_agents: bool = False,
+    ) -> OrchestrationPlan:
+        if run_all_agents:
+            return OrchestrationPlan(
+                intent="full_workflow",
+                agents_to_call=[
+                    "rag_agent",
+                    "analyst_agent",
+                    "creative_agent",
+                    "image_agent",
+                    "optimization_agent",
+                    "compliance_agent",
+                    "publication_agent",
+                    "reporting_agent",
+                ],
+                final_format="full_workflow_bundle",
+            )
         if intent == "campaign_analysis":
             return OrchestrationPlan(
                 intent=intent,
@@ -224,7 +264,13 @@ class OrchestratorAgent:
             final_format="creative_copy",
         )
 
-    def _build_request_context(self, user_message: str) -> RequestContext:
+    def _build_request_context(
+        self,
+        user_message: str,
+        *,
+        run_all_agents: bool = False,
+        export_report: bool = False,
+    ) -> RequestContext:
         message = user_message.lower()
         intent = "ad_copy"
         if "report" in message:
@@ -265,7 +311,13 @@ class OrchestratorAgent:
             product_name="Agentic OneBotAds",
             wants_image_prompt=wants_image_prompt,
             wants_image_generation=wants_image_generation,
-            wants_report_export="markdown" in message or "export" in message or "file" in message,
+            wants_report_export=(
+                export_report
+                or "markdown" in message
+                or "export" in message
+                or "file" in message
+            ),
+            run_all_agents=run_all_agents,
         )
 
     @staticmethod

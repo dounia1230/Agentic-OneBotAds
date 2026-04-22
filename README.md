@@ -125,6 +125,15 @@ On Bazzite, the first-class container path is `podman` plus Quadlet rather than 
 
 Frontend runs on `http://localhost:5173`. Backend runs on `http://127.0.0.1:8000`.
 
+### Image Provider Options
+
+- `IMAGE_PROVIDER=pollinations` is the default free MVP path for clean background generation.
+- `IMAGE_PROVIDER=diffusers` with `IMAGE_MODEL=runwayml/stable-diffusion-v1-5` keeps image generation local.
+- `IMAGE_PROVIDER=nano_banana` with `IMAGE_MODEL=gemini-2.5-flash-image` uses Gemini Image through Google's API.
+- For Nano Banana, set `GEMINI_API_KEY` in `.env`.
+- Publication visuals are composed in code: the provider generates the background, then Pillow overlays readable text.
+- Generated images are saved under `outputs/images` and served by FastAPI at `/outputs/images/...`.
+
 ## Example CLI Requests
 
 - `Analyze my campaigns.`
@@ -139,6 +148,29 @@ Frontend runs on `http://localhost:5173`. Backend runs on `http://127.0.0.1:8000
 - `POST /api/v1/campaigns/draft`
 - `POST /api/v1/assistant/run`
 - `POST /api/v1/rag/reindex`
+
+## Draft Image Test
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/campaigns/draft \
+  -H "Content-Type: application/json" \
+  -d '{
+    "product_name": "Agentic OneBotAds",
+    "audience": "SME marketing teams",
+    "goal": "Increase qualified leads",
+    "channels": ["linkedin", "meta"],
+    "tone": "professional, modern, direct",
+    "offer": "7-day pilot",
+    "key_points": ["faster launches", "brand-safe drafts"],
+    "brand_constraints": ["avoid hype", "no guaranteed outcomes"],
+    "landing_page_url": "https://example.com/demo",
+    "source_context_query": "Agentic OneBotAds SME LinkedIn campaign tone and positioning",
+    "generate_image_prompt": true,
+    "generate_image": true,
+    "compose_publication_image": true,
+    "image_provider": "pollinations"
+  }'
+```
 
 ## Useful Commands
 

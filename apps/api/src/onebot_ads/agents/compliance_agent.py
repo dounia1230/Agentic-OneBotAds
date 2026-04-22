@@ -1,3 +1,5 @@
+import re
+
 from onebot_ads.core.config import Settings
 from onebot_ads.schemas.campaigns import (
     ComplianceReviewResponse,
@@ -38,6 +40,14 @@ PROHIBITED_PHRASES = [
     "risk-free profit",
     "perfect targeting",
     "guaranteed success",
+    "guaranteed leads",
+    "without risk",
+    "no risk",
+    "instant results",
+]
+UNSUPPORTED_REGEX_PATTERNS = [
+    r"\b\d+%\s+(higher|faster|more)\b",
+    r"\bsaving\s+\d+\+?\s+hours\b",
 ]
 
 
@@ -62,6 +72,10 @@ class BrandSafetyComplianceAgent:
                 issues.append(f"Unsupported or exaggerated claim detected: '{phrase}'.")
                 caption = caption.replace(phrase, "stronger campaign outcomes")
 
+        for pattern in UNSUPPORTED_REGEX_PATTERNS:
+            if re.search(pattern, haystack, flags=re.IGNORECASE):
+                issues.append(f"Unsupported quantified claim detected: '{pattern}'.")
+
         if rag_context and (
             "does not contain enough grounded information" in rag_context.answer.lower()
         ):
@@ -71,8 +85,13 @@ class BrandSafetyComplianceAgent:
             issues.append("Accessibility alt text is missing.")
             suggested_fixes.append("Add a concise alt text description for the generated visual.")
 
-        if image and "unreadable text" not in image.negative_prompt.lower():
-            issues.append("Negative prompt should discourage unreadable text in generated visuals.")
+        if image:
+            negative_prompt = image.negative_prompt.lower()
+            text_tokens = ["unreadable text", "words", "letters", "text"]
+            if not any(token in negative_prompt for token in text_tokens):
+                issues.append(
+                    "Negative prompt should discourage readable text in generated visuals."
+                )
 
         if issues:
             suggested_fixes.append(

@@ -1,13 +1,17 @@
 from datetime import datetime
 from pathlib import Path
 
-from onebot_ads.core.config import get_settings
+from onebot_ads.core.config import Settings, get_settings
 from onebot_ads.schemas.campaigns import ReportSummary
 
 
-def write_markdown_report(report: ReportSummary, request_text: str) -> str:
-    settings = get_settings()
-    output_dir = Path(settings.output_report_dir)
+def write_markdown_report(
+    report: ReportSummary,
+    request_text: str,
+    settings: Settings | None = None,
+) -> str:
+    resolved_settings = settings or get_settings()
+    output_dir = Path(resolved_settings.output_report_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     filename = output_dir / f"campaign_report_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.md"
 

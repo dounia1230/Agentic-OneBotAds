@@ -1,7 +1,12 @@
 from onebot_ads.core.config import Settings
 from onebot_ads.schemas.campaigns import ImageGenerationResponse
 from onebot_ads.tools.creative_tools import normalize_platform
-from onebot_ads.tools.image_tools import generate_ad_image
+from onebot_ads.tools.image_composer import compose_publication_image
+from onebot_ads.tools.image_tools import (
+    build_publication_background_prompt,
+    generate_background_image,
+)
+from onebot_ads.tools.path_tools import to_outputs_url
 
 SYSTEM_PROMPT = """
 You are the Image Generation Agent of Agentic OneBotAds.
@@ -56,42 +61,77 @@ class ImageGenerationAgent:
         goal: str,
         style: str,
         request_image_generation: bool,
+        headline: str | None = None,
+        cta: str | None = None,
+        compose_publication_image_flag: bool = True,
+        provider: str | None = None,
     ) -> ImageGenerationResponse:
         platform_name = normalize_platform(platform)
         aspect_ratio = "16:9" if platform_name == "LinkedIn" else "1:1"
-        image_prompt = (
-            f"Professional {platform_name} ad visual for {product_name}, showing an AI-powered "
-            f"campaign workspace helping {audience} {goal.lower()}, {style}, "
-            f"clean SaaS dashboard, clear composition, blue and white palette, "
-            f"premium startup look, high quality, {aspect_ratio}"
+        image_spec = build_publication_background_prompt(
+            product_name=product_name,
+            audience=audience,
+            platform=platform_name,
         )
-        negative_prompt = (
-            "blurry, low quality, distorted text, unreadable text, "
-            "watermark, unreadable UI, fake logos"
-        )
-        alt_text = f"A modern AI advertising dashboard supporting {audience}."
         notes: list[str] = []
+        background_image_path = None
+        publication_image_path = None
         image_path = None
+        resolved_provider = (provider or self.settings.image_provider).lower()
         status = "prompt_only"
+        error = None
 
-        if request_image_generation:
-            try:
-                generation = generate_ad_image.invoke(
-                    {"prompt": image_prompt, "negative_prompt": negative_prompt}
+        if request_image_generation and self.settings.enable_image_generation:
+            generation = generate_background_image.invoke(
+                {
+                    "prompt": image_spec["prompt"],
+                    "provider": resolved_provider,
+                    "width": self.settings.pollinations_width,
+                    "height": self.settings.pollinations_height,
+                    "negative_prompt": image_spec["negative_prompt"],
+                    "aspect_ratio": aspect_ratio,
+                }
+            )
+            background_image_path = generation.get("background_image_path")
+            image_path = generation.get("image_path")
+            status = generation.get("status", "not_generated")
+            error = generation.get("error")
+            notes.extend(generation.get("notes", []))
+
+            if (
+                compose_publication_image_flag
+                and background_image_path
+                and headline
+                and cta
+            ):
+                composition = compose_publication_image(
+                    background_path=background_image_path,
+                    headline=headline,
+                    cta=cta,
+                    product_name=product_name,
+                    output_dir=str(self.settings.output_image_dir),
                 )
-                image_path = generation.get("image_path")
-                status = generation.get("status", "not_generated")
-                if generation.get("message"):
-                    notes.append(generation["message"])
-            except Exception as exc:
-                status = "failed"
-                notes.append(str(exc))
+                publication_image_path = composition.get("image_path")
+                if composition["status"] == "composed" and publication_image_path:
+                    status = "composed"
+                    image_path = publication_image_path
+                elif composition["status"] == "composition_failed":
+                    error = composition.get("error")
+                    notes.append(f"Composition failed: {composition.get('error')}")
+        elif request_image_generation and not self.settings.enable_image_generation:
+            status = "disabled"
+            notes.append("Image generation is disabled in configuration.")
 
         return ImageGenerationResponse(
-            image_prompt=image_prompt,
-            negative_prompt=negative_prompt,
-            alt_text=alt_text,
+            image_prompt=image_spec["prompt"],
+            negative_prompt=image_spec["negative_prompt"],
+            alt_text=image_spec["alt_text"],
+            provider=resolved_provider,
+            background_image_path=background_image_path,
+            publication_image_path=publication_image_path,
             image_path=image_path,
+            image_url=to_outputs_url(image_path),
             status=status,
+            error=error,
             notes=notes,
         )

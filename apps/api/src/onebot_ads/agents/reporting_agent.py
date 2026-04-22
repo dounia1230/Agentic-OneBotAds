@@ -69,5 +69,9 @@ class ReportingAgent:
             next_experiments=next_experiments,
         )
         if export_markdown:
-            report.report_path = write_markdown_report(report, request_text=request_text)
+            report.report_path = write_markdown_report(
+                report,
+                request_text=request_text,
+                settings=self.settings,
+            )
         return report

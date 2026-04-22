@@ -1,4 +1,6 @@
 import json
+import re
+from pathlib import Path
 from textwrap import dedent
 
 from pydantic import BaseModel, Field
@@ -13,6 +15,25 @@ from onebot_ads.schemas.campaigns import (
     ImagePrompt,
 )
 from onebot_ads.tools.channel_guidance import build_channel_guidance, build_default_cta
+from onebot_ads.tools.image_composer import compose_publication_image
+from onebot_ads.tools.image_tools import (
+    build_publication_background_prompt,
+    generate_background_image,
+)
+from onebot_ads.tools.path_tools import to_outputs_url
+
+UNSUPPORTED_PATTERN_REPLACEMENTS = [
+    (r"\bguaranteed\b", "designed to support"),
+    (r"\brisk-free\b", "lower-friction"),
+    (r"\bwithout risk\b", "with more confidence"),
+    (r"\bno risk\b", "with fewer manual steps"),
+    (r"\binstant results\b", "faster iteration"),
+    (r"\bperfect targeting\b", "stronger targeting"),
+    (r"\bguaranteed leads\b", "qualified lead generation"),
+    (r"\bguaranteed sales\b", "stronger sales opportunities"),
+    (r"\b\d+%\s+(higher|faster|more)\b", "stronger"),
+    (r"\bsaving\s+\d+\+?\s+hours\b", "saving time"),
+]
 
 
 class _DraftVariantPayload(BaseModel):
@@ -37,14 +58,18 @@ class CampaignCopyAgent:
     def draft(self, brief: CampaignBrief) -> CampaignDraftResponse:
         warnings: list[str] = []
         context = self._retrieve_context(brief)
+        if brief.source_context_query and not context:
+            warnings.append("RAG context was requested but no context was retrieved.")
 
         if self.settings.enable_live_llm:
             try:
-                return self._draft_with_live_llm(brief, context, warnings)
+                response = self._draft_with_live_llm(brief, context, warnings)
+                return self._finalize_draft_response(response, brief, context, warnings)
             except Exception as exc:
                 warnings.append(f"Live LLM draft path failed, fallback used: {exc}")
 
-        return self._draft_fallback(brief, context, warnings)
+        response = self._draft_fallback(brief, context, warnings)
+        return self._finalize_draft_response(response, brief, context, warnings)
 
     def _retrieve_context(self, brief: CampaignBrief) -> list[ContextSnippet]:
         if not self.settings.enable_rag:
@@ -230,6 +255,126 @@ class CampaignCopyAgent:
             used_context=context,
             warnings=warnings,
         )
+
+    def _finalize_draft_response(
+        self,
+        response: CampaignDraftResponse,
+        brief: CampaignBrief,
+        context: list[ContextSnippet],
+        warnings: list[str],
+    ) -> CampaignDraftResponse:
+        compliance_issues: list[str] = []
+        response.used_context = context
+        response.variants = [
+            self._sanitize_variant(variant, brief.brand_constraints, compliance_issues)
+            for variant in response.variants
+        ]
+
+        if brief.generate_image_prompt or brief.generate_image or brief.compose_publication_image:
+            response.image_prompt = self._build_image_payload(brief, response.variants)
+
+        response.warnings = warnings
+        response.compliance_issues = list(dict.fromkeys(compliance_issues))
+        response.status = "needs_revision" if response.compliance_issues else "ready_for_review"
+        return response
+
+    def _build_image_payload(
+        self,
+        brief: CampaignBrief,
+        variants: list[AdVariant],
+    ) -> ImagePrompt:
+        provider = (brief.image_provider or self.settings.image_provider).lower()
+        image_spec = build_publication_background_prompt(
+            product_name=brief.product_name,
+            audience=brief.audience,
+            platform="/".join(brief.channels) if brief.channels else "linkedin",
+        )
+        notes: list[str] = []
+        background_path = None
+        publication_path = None
+        status = "prompt_only"
+        error = None
+
+        if brief.generate_image:
+            generation = generate_background_image.invoke(
+                {
+                    "prompt": image_spec["prompt"],
+                    "provider": provider,
+                    "width": self.settings.pollinations_width,
+                    "height": self.settings.pollinations_height,
+                    "negative_prompt": image_spec["negative_prompt"],
+                    "aspect_ratio": "16:9" if "linkedin" in brief.channels else "1:1",
+                }
+            )
+            status = generation["status"]
+            background_path = generation.get("background_image_path")
+            error = generation.get("error")
+            notes.extend(generation.get("notes", []))
+
+            if brief.compose_publication_image and background_path and variants:
+                composition = compose_publication_image(
+                    background_path=background_path,
+                    headline=variants[0].headline,
+                    cta=variants[0].cta,
+                    product_name=brief.product_name,
+                    output_dir=str(self.settings.output_image_dir),
+                )
+                publication_path = composition.get("image_path")
+                if composition["status"] == "composed" and publication_path:
+                    status = "composed"
+                elif composition["status"] == "composition_failed":
+                    error = composition.get("error")
+                    notes.append(f"Composition failed: {composition.get('error')}")
+
+        image_path = publication_path or background_path
+        final_image_path = image_path if image_path and Path(image_path).exists() else None
+        return ImagePrompt(
+            prompt=image_spec["prompt"],
+            provider=provider,
+            negative_prompt=image_spec["negative_prompt"],
+            status=status,
+            background_image_path=background_path,
+            publication_image_path=publication_path,
+            image_path=final_image_path,
+            image_url=to_outputs_url(final_image_path),
+            alt_text=image_spec["alt_text"],
+            error=error,
+            notes=notes,
+        )
+
+    def _sanitize_variant(
+        self,
+        variant: AdVariant,
+        brand_constraints: list[str],
+        compliance_issues: list[str],
+    ) -> AdVariant:
+        if not self._strict_compliance(brand_constraints):
+            return variant
+
+        return AdVariant(
+            channel=variant.channel,
+            headline=self._sanitize_text(variant.headline, compliance_issues),
+            primary_text=self._sanitize_text(variant.primary_text, compliance_issues),
+            cta=self._sanitize_text(variant.cta, compliance_issues),
+            rationale=variant.rationale,
+        )
+
+    @staticmethod
+    def _strict_compliance(brand_constraints: list[str]) -> bool:
+        lowered = {constraint.lower() for constraint in brand_constraints}
+        return "avoid hype" in lowered or "no guaranteed outcomes" in lowered
+
+    @staticmethod
+    def _sanitize_text(text: str, compliance_issues: list[str]) -> str:
+        sanitized = text
+        for pattern, replacement in UNSUPPORTED_PATTERN_REPLACEMENTS:
+            updated = re.sub(pattern, replacement, sanitized, flags=re.IGNORECASE)
+            if updated != sanitized:
+                compliance_issues.append(
+                    f"Removed unsupported claim pattern from draft copy: {pattern}"
+                )
+                sanitized = updated
+        return sanitized
 
     @staticmethod
     def _extract_json_payload(raw: str) -> dict:

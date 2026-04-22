@@ -1,44 +1,56 @@
 # Architecture
 
-## Top-Level Shape
+## System Overview
 
-```text
-apps/api
-  FastAPI entrypoints, orchestration services, agent logic, RAG integration
-apps/web
-  React operator UI for campaign briefing and draft review
-data/knowledge_base
-  Local brand, offer, audience, and campaign reference material
-data/chroma
-  Persistent Chroma data created during local indexing
-outputs
-  Generated ad copy exports and image artifacts
+Agentic OneBotAds is a local-first advertising assistant with a thin CLI and FastAPI API on top of a Python multi-agent backend. The orchestrator classifies the request, invokes the right specialist agents, and returns structured outputs for review instead of directly publishing ads.
+
+## Component Roles
+
+- LangChain: prompt orchestration, optional `ChatOllama` interactions, and tool wrappers.
+- LlamaIndex: document ingestion, vector indexing, and query engine access for private marketing context.
+- Ollama: local text LLM provider for `qwen3:8b` and the `nomic-embed-text:latest` embedding model.
+- ChromaDB: persistent vector storage under `vector_store/chroma`.
+
+## Agent Flow
+
+```mermaid
+flowchart TD
+    U[User] --> APP[app.py CLI]
+    APP --> O[Orchestrator Agent]
+    O --> RAG[RAG Marketing Agent]
+    O --> ANALYST[Campaign Analyst Agent]
+    O --> CREATIVE[Creative Copywriting Agent]
+    O --> IMAGE[Image Generation Agent]
+    O --> PUB[Publication Agent]
+    O --> OPT[Optimization Strategy Agent]
+    O --> COMP[Brand Safety Agent]
+    O --> REPORT[Reporting Agent]
+    RAG --> LI[LlamaIndex Query Engine]
+    LI --> CH[ChromaDB Persistent Vector Store]
+    CH --> KB[Private Marketing Knowledge Base]
+    ANALYST --> CSV[Campaign CSV]
+    IMAGE --> IMG[Diffusers / Ollama Image Model]
+    PUB --> OUT[Final Publication Package]
 ```
 
-## Backend Boundaries
+## Publication Workflow
 
-- `api/`: HTTP routes and dependency wiring
-- `services/`: application-level orchestration exposed to the API
-- `agents/`: prompt-driven campaign drafting behavior
-- `rag/`: document indexing and retrieval via LlamaIndex and Chroma
-- `tools/`: deterministic helpers such as channel guardrails and CTA defaults
-- `schemas/`: request and response contracts
-- `core/`: env-driven configuration
+1. The orchestrator detects a publication request and infers defaults such as `LinkedIn`, `SMEs and marketing teams`, and `professional, modern, direct`.
+2. The RAG agent retrieves product, tone, and rules context from the private knowledge base.
+3. The creative agent generates structured copy and A/B variants.
+4. The image agent creates a prompt and optionally calls the image tool when generation is enabled and requested.
+5. The compliance agent validates the copy and prompt.
+6. The publication agent assembles the publication package with schedule and status.
 
-## Request Flow
+## Campaign Analysis Workflow
 
-1. The frontend submits a `CampaignBrief` to `POST /api/v1/campaigns/draft`.
-2. The backend optionally retrieves matching context from the local knowledge base.
-3. The campaign agent composes prompt inputs and attempts live Ollama generation through LangChain.
-4. If live generation is unavailable, the service falls back to deterministic template assembly so the UI stays usable.
-5. Structured results are returned to the frontend, with warnings when the system had to degrade.
+1. The analyst agent loads `data/campaigns.csv`.
+2. It calculates CTR, conversion rate, CPA, ROAS, ROI, and campaign-level metrics.
+3. It identifies the strongest and weakest campaigns and returns actionable insights.
+4. The optimization agent converts those findings into budget and test recommendations when needed.
 
-## Why This Shape
+## Optimization Workflow
 
-- It keeps the MVP runnable without cloud dependencies.
-- It keeps agent logic separate from storage and transport.
-- It avoids committing too early to a larger workflow engine while preserving a clean upgrade path.
-
-## Upgrade Path
-
-The current orchestration is intentionally bounded. If the product moves into multi-step approval loops, campaign planning graphs, or background task coordination, add a dedicated workflow layer instead of inflating route handlers or prompt modules.
+1. Campaign analysis results feed the optimization agent.
+2. The optimization agent prioritizes quick wins versus strategic changes.
+3. The final response includes what to scale, what to reduce, and what experiments to run next.

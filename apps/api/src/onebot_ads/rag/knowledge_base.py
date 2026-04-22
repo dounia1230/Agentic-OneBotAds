@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from onebot_ads.core.config import Settings
 from onebot_ads.schemas.campaigns import ContextSnippet, ReindexResponse
 
@@ -58,6 +56,8 @@ class KnowledgeBaseService:
             return []
 
     def _load_documents(self) -> list:
+        from pathlib import Path
+
         from llama_index.core import SimpleDirectoryReader
 
         input_dir = Path(self.settings.knowledge_base_directory)

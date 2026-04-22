@@ -3,7 +3,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from onebot_ads.api.dependencies import get_campaign_service
-from onebot_ads.schemas.campaigns import CampaignBrief, CampaignDraftResponse, ReindexResponse
+from onebot_ads.schemas.campaigns import (
+    AssistantRequest,
+    AssistantResponse,
+    CampaignBrief,
+    CampaignDraftResponse,
+    ReindexResponse,
+)
 from onebot_ads.services.campaign_service import CampaignService
 
 router = APIRouter(tags=["campaigns"])
@@ -13,6 +19,11 @@ CampaignServiceDep = Annotated[CampaignService, Depends(get_campaign_service)]
 @router.post("/campaigns/draft", response_model=CampaignDraftResponse)
 def draft_campaign(brief: CampaignBrief, service: CampaignServiceDep) -> CampaignDraftResponse:
     return service.draft_campaign(brief)
+
+
+@router.post("/assistant/run", response_model=AssistantResponse)
+def run_assistant(request: AssistantRequest, service: CampaignServiceDep) -> AssistantResponse:
+    return service.handle_request(request.message)
 
 
 @router.post("/rag/reindex", response_model=ReindexResponse)

@@ -3,16 +3,24 @@
 ## Prerequisites
 
 - Python `3.11`
-- Node.js and npm
-- Ollama installed locally if you want live model responses
+- Node.js and npm for the existing web workspace
+- Ollama installed locally if you want live text generation
 
-## Backend
+## Backend CLI And API
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
-pip install -e .[dev]
+pip install -r requirements.txt
 copy .env.example .env
+python rag/build_index.py
+python app.py
+```
+
+To run the FastAPI server instead of the CLI:
+
+```powershell
+pip install -e .[dev]
 python -m uvicorn onebot_ads.main:app --reload
 ```
 
@@ -30,18 +38,9 @@ ollama pull qwen3:8b
 ollama pull nomic-embed-text:latest
 ```
 
-The default app configuration expects Ollama at `http://localhost:11434`.
-
-## Knowledge Base
-
-Starter knowledge documents live in [data/knowledge_base/example_brand_playbook.md](../data/knowledge_base/example_brand_playbook.md). Reindex them with:
-
-```powershell
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/v1/rag/reindex
-```
-
 ## Environment Notes
 
 - Keep `.env` local; it is ignored by git.
-- Generated artifacts stay under `outputs/`.
-- Chroma persistence stays under `data/chroma/`.
+- Generated images stay under `outputs/images`.
+- Report exports stay under `outputs/reports`.
+- Chroma persistence stays under `vector_store/chroma`.

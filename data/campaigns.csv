@@ -1,0 +1,5 @@
+campaign_id,platform,audience,impressions,clicks,spend,conversions,revenue
+CAMP001,Facebook,Students,10000,320,500,25,1200
+CAMP002,Instagram,Young Professionals,15000,600,900,48,2800
+CAMP003,LinkedIn,SMEs,8000,280,700,35,3500
+CAMP004,Google Ads,Ecommerce,20000,900,1500,70,5200

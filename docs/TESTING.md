@@ -12,6 +12,8 @@ ruff check .
 Current backend coverage focuses on:
 - API health wiring
 - deterministic campaign draft fallback behavior
+- campaign analytics calculations
+- assistant orchestration for publication requests
 
 ## Frontend
 

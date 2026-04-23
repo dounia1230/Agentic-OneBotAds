@@ -1,0 +1,270 @@
+{
+  "intent": "full_workflow",
+  "plan": {
+    "intent": "full_workflow",
+    "agents_to_call": [
+      "rag_agent",
+      "analyst_agent",
+      "creative_agent",
+      "image_agent",
+      "optimization_agent",
+      "compliance_agent",
+      "publication_agent",
+      "reporting_agent"
+    ],
+    "final_format": "full_workflow_bundle"
+  },
+  "rag": {
+    "answer": "Grounded context found in the knowledge base:\n- # Previous Ads Examples ## Purpose This file stores reusable ad examples and message patterns in a retrieval-friendly format. Use it to help the assistant answer with concrete patterns instead of generic ad copy. ## Collection Rules - Save your own historical ads first. - Sa\n- - Use business language that sounds reviewable and reliable. ## Example Approved Phrases - Turn brand and campaign knowledge into reusable context. - Keep ad drafting grounded in approved messaging. - Reduce repeated manual work across campaign creation. - Build a clearer workf\n- # Audience Personas ## Purpose This file defines the audiences most likely to buy Agentic OneBotAds, an AI-assisted ads and marketing operations product. This is starter content. Validate and refine it with first-party data from: - GA4 demographic and acquisition reports - Sea",
+    "relevant_context": [
+      "# Previous Ads Examples ## Purpose This file stores reusable ad examples and message patterns in a retrieval-friendly format. Use it to help the assistant answer with concrete patterns instead of generic ad copy. ## Collection Rules - Save your own historical ads first. - Sa",
+      "- Use business language that sounds reviewable and reliable. ## Example Approved Phrases - Turn brand and campaign knowledge into reusable context. - Keep ad drafting grounded in approved messaging. - Reduce repeated manual work across campaign creation. - Build a clearer workf",
+      "# Audience Personas ## Purpose This file defines the audiences most likely to buy Agentic OneBotAds, an AI-assisted ads and marketing operations product. This is starter content. Validate and refine it with first-party data from: - GA4 demographic and acquisition reports - Sea"
+    ],
+    "source_documents": [
+      "previous_ads_examples.md",
+      "brand_guidelines.md",
+      "audience_personas.md"
+    ],
+    "confidence": "medium"
+  },
+  "analysis": {
+    "summary": {
+      "ctr": "4.83%",
+      "conversion_rate": "6.31%",
+      "cpa": "24.74",
+      "roas": "2.86",
+      "roi": "186.37%"
+    },
+    "best_campaign": "ALT001",
+    "weakest_campaign": "ALT006",
+    "main_problem": "Some campaigns are spending budget without matching conversion efficiency.",
+    "insights": [
+      "LinkedIn B2B Operations Managers is the strongest revenue-efficient segment."
+    ],
+    "campaign_breakdown": [
+      {
+        "campaign_id": "ALT001",
+        "platform": "LinkedIn",
+        "audience": "B2B Operations Managers",
+        "ctr_percent": 3.5,
+        "conversion_rate_percent": 9.05,
+        "cpa": 22.11,
+        "roas": 5.43,
+        "roi_percent": 442.86,
+        "spend": 840.0,
+        "revenue": 4560.0,
+        "clicks": 420,
+        "conversions": 38,
+        "impressions": 12000
+      },
+      {
+        "campaign_id": "ALT002",
+        "platform": "Instagram",
+        "audience": "DTC Beauty Shoppers",
+        "ctr_percent": 4.79,
+        "conversion_rate_percent": 6.12,
+        "cpa": 21.46,
+        "roas": 2.8,
+        "roi_percent": 179.55,
+        "spend": 1760.0,
+        "revenue": 4920.0,
+        "clicks": 1340,
+        "conversions": 82,
+        "impressions": 28000
+      },
+      {
+        "campaign_id": "ALT003",
+        "platform": "Facebook",
+        "audience": "Local Service Owners",
+        "ctr_percent": 3.46,
+        "conversion_rate_percent": 4.53,
+        "cpa": 33.79,
+        "roas": 1.92,
+        "roi_percent": 92.35,
+        "spend": 980.0,
+        "revenue": 1885.0,
+        "clicks": 640,
+        "conversions": 29,
+        "impressions": 18500
+      },
+      {
+        "campaign_id": "ALT004",
+        "platform": "Google Ads",
+        "audience": "High Intent SaaS Buyers",
+        "ctr_percent": 7.38,
+        "conversion_rate_percent": 10.68,
+        "cpa": 16.98,
+        "roas": 4.12,
+        "roi_percent": 312.15,
+        "spend": 2140.0,
+        "revenue": 8820.0,
+        "clicks": 1180,
+        "conversions": 126,
+        "impressions": 16000
+      },
+      {
+        "campaign_id": "ALT005",
+        "platform": "LinkedIn",
+        "audience": "Startup Founders",
+        "ctr_percent": 2.74,
+        "conversion_rate_percent": 5.38,
+        "cpa": 49.29,
+        "roas": 1.83,
+        "roi_percent": 82.61,
+        "spend": 690.0,
+        "revenue": 1260.0,
+        "clicks": 260,
+        "conversions": 14,
+        "impressions": 9500
+      },
+      {
+        "campaign_id": "ALT006",
+        "platform": "Instagram",
+        "audience": "Gen Z Creators",
+        "ctr_percent": 5.52,
+        "conversion_rate_percent": 3.57,
+        "cpa": 36.89,
+        "roas": 1.49,
+        "roi_percent": 49.11,
+        "spend": 2250.0,
+        "revenue": 3355.0,
+        "clicks": 1710,
+        "conversions": 61,
+        "impressions": 31000
+      }
+    ],
+    "raw_data_path": "campaigns_alt.csv"
+  },
+  "creative": {
+    "headline": "Boost Your Marketing Efficiency with AI-Powered Automation",
+    "primary_text": "Agentic OneBotAds helps SMEs and marketing teams save 20+ hours monthly by automating repetitive tasks. Scale your campaigns faster with intelligent ad optimization and real-time analytics.",
+    "description": "Say goodbye to manual ad management. Our AI-driven platform streamlines operations, reduces errors, and delivers measurable ROI. Perfect for busy teams looking to focus on strategy, not spreadsheets.",
+    "slogan": "Smart Automation for Smarter Results",
+    "cta": "Schedule a Demo Today",
+    "hashtags": [
+      "#MarketingAutomation",
+      "#DigitalMarketing",
+      "#SMETools",
+      "#AdTech"
+    ],
+    "ab_variants": [
+      {
+        "headline": "Cut Manual Work by 50% with OneBotAds",
+        "primary_text": "Automate ad creation, budget allocation, and performance tracking. Focus on growth while we handle the execution. Ideal for marketing teams needing scalable solutions."
+      },
+      {
+        "headline": "Transform Your Marketing Workflow Today",
+        "primary_text": "Agentic OneBotAds eliminates guesswork with predictive analytics and automated ad optimization. Ideal for SMEs and teams seeking smarter, faster results."
+      }
+    ]
+  },
+  "image": {
+    "image_prompt": "Create a brand-safe campaign visual background for Agentic OneBotAds, aimed at SMEs and marketing teams, optimized for LinkedIn publication format. Use a polished commercial advertising style, strong focal subject cues, clean composition, premium lighting, soft depth, negative space for text overlay, high quality, no text, no words, no letters, no logos, no watermark, no fake UI, no readable labels.",
+    "negative_prompt": "words, letters, text, watermark, logo, distorted UI, unreadable dashboard, blurry, low quality, fake brand marks",
+    "alt_text": "Campaign visual background for Agentic OneBotAds.",
+    "provider": "qwen_image",
+    "backend": "huggingface_space",
+    "space_id": "Qwen/Qwen-Image-2512",
+    "background_image_path": null,
+    "publication_image_path": null,
+    "image_path": null,
+    "image_url": null,
+    "status": "prompt_ready",
+    "error": null,
+    "notes": [],
+    "fallback_used": false,
+    "fallback_attempted": false,
+    "fallback_succeeded": false,
+    "primary_provider": "qwen_image",
+    "fallback_provider": null
+  },
+  "optimization": {
+    "quick_wins": [
+      {
+        "priority": "high",
+        "recommendation": "Reduce spend on ALT006 until fresh creative is tested.",
+        "reason": "Some campaigns are spending budget without matching conversion efficiency."
+      }
+    ],
+    "strategic_changes": [
+      {
+        "priority": "medium",
+        "recommendation": "Tighten audience targeting and remove low-intent segments.",
+        "reason": "CPA is elevated relative to the current conversion efficiency."
+      },
+      {
+        "priority": "medium",
+        "recommendation": "Create a second creative focused on time savings for SMEs.",
+        "reason": "SME-oriented efficiency messaging fits the current product positioning."
+      }
+    ],
+    "ab_tests": [
+      "Test benefit-focused headline vs. automation-focused headline.",
+      "Test dashboard visual vs. team-at-work visual."
+    ]
+  },
+  "compliance": {
+    "approved": true,
+    "issues": [],
+    "suggested_fixes": [],
+    "final_safe_version": {
+      "headline": "Boost Your Marketing Efficiency with AI-Powered Automation",
+      "caption": "Agentic OneBotAds helps SMEs and marketing teams save 20+ hours monthly by automating repetitive tasks. Scale your campaigns faster with intelligent ad optimization and real-time analytics."
+    }
+  },
+  "publication": {
+    "platform": "LinkedIn",
+    "headline": "Boost Your Marketing Efficiency with AI-Powered Automation",
+    "caption": "Agentic OneBotAds helps SMEs and marketing teams save 20+ hours monthly by automating repetitive tasks. Scale your campaigns faster with intelligent ad optimization and real-time analytics.",
+    "cta": "Schedule a Demo Today",
+    "hashtags": [
+      "#MarketingAutomation",
+      "#DigitalMarketing",
+      "#SMETools",
+      "#AdTech"
+    ],
+    "image_prompt": "Create a brand-safe campaign visual background for Agentic OneBotAds, aimed at SMEs and marketing teams, optimized for LinkedIn publication format. Use a polished commercial advertising style, strong focal subject cues, clean composition, premium lighting, soft depth, negative space for text overlay, high quality, no text, no words, no letters, no logos, no watermark, no fake UI, no readable labels.",
+    "image_path": null,
+    "image_url": null,
+    "alt_text": "Campaign visual background for Agentic OneBotAds.",
+    "recommended_schedule": "Tuesday or Thursday morning",
+    "compliance_status": "approved",
+    "optimization_notes": [
+      "Reduce spend on ALT006 until fresh creative is tested.",
+      "Tighten audience targeting and remove low-intent segments."
+    ],
+    "status": "ready_for_review"
+  },
+  "report": {
+    "executive_summary": "The account is currently led by ALT001 while ALT006 needs attention.",
+    "kpi_overview": {
+      "CTR": "4.83%",
+      "Conversion Rate": "6.31%",
+      "CPA": "24.74",
+      "ROAS": "2.86",
+      "ROI": "186.37%"
+    },
+    "best_performing_campaign": "ALT001",
+    "weakest_campaign": "ALT006",
+    "key_insights": [
+      "LinkedIn B2B Operations Managers is the strongest revenue-efficient segment."
+    ],
+    "recommended_actions": [
+      "Reduce spend on ALT006 until fresh creative is tested.",
+      "Tighten audience targeting and remove low-intent segments.",
+      "Create a second creative focused on time savings for SMEs."
+    ],
+    "next_experiments": [
+      "Test benefit-focused headline vs. automation-focused headline.",
+      "Test dashboard visual vs. team-at-work visual."
+    ],
+    "report_path": "outputs\\reports\\campaign_report_20260423_212657.md"
+  },
+  "saved_output_path": "C:\\Users\\User\\Agentic OneBotAds\\Agentic-OneBotAds\\outputs\\posts\\20260423_212657_analyze_this_campaign_data_recommend_optimizations.json",
+  "artifact_paths": [
+    "outputs\\reports\\campaign_report_20260423_212657.md",
+    "C:\\Users\\User\\Agentic OneBotAds\\Agentic-OneBotAds\\outputs\\posts\\20260423_212657_analyze_this_campaign_data_recommend_optimizations.json"
+  ],
+  "status": "ready_for_review"
+}

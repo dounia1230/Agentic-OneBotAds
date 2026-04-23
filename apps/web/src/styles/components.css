@@ -298,6 +298,30 @@ textarea {
   cursor: not-allowed;
 }
 
+.secondary-action {
+  border: 1px solid rgba(149, 199, 255, 0.22);
+  border-radius: 999px;
+  padding: 12px 18px;
+  background: rgba(149, 199, 255, 0.08);
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.secondary-action:hover:not(:disabled),
+.secondary-action:focus-visible:not(:disabled) {
+  background: rgba(149, 199, 255, 0.14);
+  border-color: rgba(149, 199, 255, 0.34);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.secondary-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .primary-action-wide {
   min-width: 220px;
   justify-self: start;
@@ -576,6 +600,30 @@ textarea {
   font-size: clamp(1.15rem, 1.8vw, 1.45rem);
 }
 
+.draft-variant-list {
+  display: grid;
+  gap: 22px;
+  margin-top: 24px;
+}
+
+.draft-variant-card {
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.draft-variant-card h5 {
+  margin: 0;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 1.05rem;
+  line-height: 1.25;
+}
+
+.draft-variant-card p {
+  margin: 12px 0 0;
+  color: var(--ink-soft);
+  line-height: 1.7;
+}
+
 .report-fields {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(220px, 0.42fr);
@@ -812,6 +860,41 @@ textarea {
   line-height: 1.08;
 }
 
+.knowledge-chat-runtime {
+  width: min(100%, 760px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px;
+  border: 1px solid rgba(149, 199, 255, 0.12);
+  border-radius: 20px;
+  background: rgba(149, 199, 255, 0.05);
+}
+
+.knowledge-chat-runtime.is-inline {
+  width: min(100%, 720px);
+}
+
+.knowledge-chat-runtime-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.knowledge-chat-runtime-copy p {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+.knowledge-chat-runtime-copy .eyebrow {
+  color: var(--accent);
+}
+
+.knowledge-chat-runtime-error {
+  color: #ffb8b8;
+}
+
 .knowledge-chat-results {
   width: min(100%, 820px);
   display: grid;
@@ -1044,6 +1127,12 @@ textarea {
 
   .knowledge-chat-results {
     width: 100%;
+  }
+
+  .knowledge-chat-runtime,
+  .knowledge-chat-runtime.is-inline {
+    width: 100%;
+    flex-direction: column;
   }
 
   .knowledge-chat-composer,

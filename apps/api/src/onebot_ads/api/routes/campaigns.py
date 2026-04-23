@@ -29,10 +29,13 @@ def run_assistant(request: AssistantRequest, service: CampaignServiceDep) -> Ass
         audience=request.audience,
         goal=request.goal,
         platform=request.platform,
+        campaign_csv_content=request.campaign_csv_content,
+        campaign_csv_filename=request.campaign_csv_filename,
         knowledge_scope=request.knowledge_scope,
         run_all_agents=request.run_all_agents,
         save_output=request.save_output,
         export_report=request.export_report,
+        use_web_search=request.use_web_search,
     )
 
 

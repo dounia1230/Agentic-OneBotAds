@@ -3,7 +3,7 @@ import { ChangeEvent, FormEvent, useRef, useState } from "react";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { SectionIntro } from "../../../components/ui/SectionIntro";
 import { useScrollIntoViewOnChange } from "../../../hooks/useScrollIntoViewOnChange";
-import { canPreviewImage } from "../../../lib/media";
+import { canPreviewImage, resolveMediaUrl } from "../../../lib/media";
 import { PLATFORM_OPTIONS } from "../../../lib/platforms";
 import { runAssistant } from "../../../services/api/onebot";
 import type { ImageGenerationResponse } from "../../../types/api";
@@ -30,7 +30,7 @@ function buildImagePromptRequestMessage(form: ImagePromptFormValues): string {
     `Platform: ${form.platform}.`,
     `Audience: ${form.audience}.`,
     `Style: ${form.style}.`,
-    form.generateImage ? "Generate the image if the stack allows it." : "Prompt-only output is fine.",
+    form.generateImage ? "Create the image if the stack allows it." : "Prompt-only output is fine.",
   ].join(" ");
 }
 
@@ -41,6 +41,7 @@ export function ImagePromptTab() {
   const [intent, setIntent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const previewUrl = resolveMediaUrl(result?.image_url ?? result?.image_path);
 
   useScrollIntoViewOnChange(resultsRef, result);
 
@@ -61,7 +62,13 @@ export function ImagePromptTab() {
     setIsSubmitting(true);
 
     try {
-      const response = await runAssistant({ message: buildImagePromptRequestMessage(form) });
+      const response = await runAssistant({
+        message: buildImagePromptRequestMessage(form),
+        product_name: form.productName,
+        audience: form.audience,
+        goal: "Generate image guidance",
+        platform: form.platform,
+      });
 
       if (!response.image) {
         setResult(null);
@@ -170,10 +177,22 @@ export function ImagePromptTab() {
             </article>
 
             <article className="detail-card">
+              <p className="eyebrow">Provider</p>
+              <h3>{result.provider}</h3>
+            </article>
+
+            <article className="detail-card">
               <p className="eyebrow">Intent</p>
               <h3>{intent ?? "Unknown"}</h3>
             </article>
           </div>
+
+          {result.error ? (
+            <article className="warning-card">
+              <p className="eyebrow">Generation Error</p>
+              <p>{result.error}</p>
+            </article>
+          ) : null}
 
           {result.notes.length > 0 ? (
             <article className="warning-card">
@@ -186,10 +205,14 @@ export function ImagePromptTab() {
             </article>
           ) : null}
 
-          {canPreviewImage(result.image_path) ? (
+          {canPreviewImage(result.image_url ?? result.image_path) && previewUrl ? (
             <article className="detail-card">
               <p className="eyebrow">Preview</p>
-              <img className="image-preview" src={result.image_path ?? ""} alt={result.alt_text} />
+              <img
+                className="image-preview"
+                src={previewUrl}
+                alt={result.alt_text}
+              />
             </article>
           ) : null}
         </div>

@@ -61,6 +61,7 @@ class Settings(BaseSettings):
         validation_alias="QWEN_IMAGE_SPACE_ID",
     )
     hf_token: str | None = Field(default=None, validation_alias="HF_TOKEN")
+    serpapi_api_key: str | None = Field(default=None, validation_alias="SERPAPI_API_KEY")
     outputs_directory: Path = PROJECT_ROOT / "outputs"
     output_image_dir: Path = Field(
         default=PROJECT_ROOT / "outputs" / "images",

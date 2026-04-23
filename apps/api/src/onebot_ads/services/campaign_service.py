@@ -36,10 +36,13 @@ class CampaignService:
         audience: str | None = None,
         goal: str | None = None,
         platform: str | None = None,
+        campaign_csv_content: str | None = None,
+        campaign_csv_filename: str | None = None,
         knowledge_scope=None,
         run_all_agents: bool = False,
         save_output: bool = False,
         export_report: bool = False,
+        use_web_search: bool = False,
     ) -> AssistantResponse:
         result = self.orchestrator_agent.run(
             user_message,
@@ -47,9 +50,12 @@ class CampaignService:
             audience=audience,
             goal=goal,
             platform=platform,
+            campaign_csv_content=campaign_csv_content,
+            campaign_csv_filename=campaign_csv_filename,
             knowledge_scope=knowledge_scope,
             run_all_agents=run_all_agents,
             export_report=export_report,
+            use_web_search=use_web_search,
         )
         result.artifact_paths = self._collect_artifact_paths(result)
 

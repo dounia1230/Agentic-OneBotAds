@@ -1,4 +1,5 @@
 import csv
+from io import StringIO
 from pathlib import Path
 
 from langchain.tools import tool
@@ -11,7 +12,11 @@ def _safe_divide(numerator: float, denominator: float) -> float:
 
 
 @tool
-def analyze_campaign_performance(csv_path: str | None = None) -> dict:
+def analyze_campaign_performance(
+    csv_path: str | None = None,
+    csv_content: str | None = None,
+    source_label: str | None = None,
+) -> dict:
     """
     Analyze campaign performance from a CSV file.
 
@@ -19,24 +24,36 @@ def analyze_campaign_performance(csv_path: str | None = None) -> dict:
     campaign_id, platform, audience, impressions, clicks, spend, conversions, revenue
     """
     settings = get_settings()
-    source_path = Path(csv_path or settings.campaigns_csv_path)
-    if not source_path.exists():
-        return {
-            "error": "file_not_found",
-            "message": f"Campaign CSV not found: {source_path}",
-        }
+    source_path = None
+    source_reference = source_label or "uploaded_campaign_data.csv"
+
+    if csv_content:
+        csv_buffer = StringIO(csv_content)
+    else:
+        source_path = Path(csv_path or settings.campaigns_csv_path)
+        source_reference = str(source_path)
+        if not source_path.exists():
+            return {
+                "error": "file_not_found",
+                "message": f"Campaign CSV not found: {source_path}",
+            }
 
     try:
         import pandas as pd
 
-        df = pd.read_csv(source_path)
+        df = pd.read_csv(csv_buffer if csv_content else source_path)
         rows = df.to_dict(orient="records")
         columns = set(df.columns)
     except ImportError:
-        with source_path.open("r", encoding="utf-8", newline="") as handle:
-            reader = csv.DictReader(handle)
+        if csv_content:
+            reader = csv.DictReader(StringIO(csv_content))
             rows = list(reader)
             columns = set(reader.fieldnames or [])
+        else:
+            with source_path.open("r", encoding="utf-8", newline="") as handle:
+                reader = csv.DictReader(handle)
+                rows = list(reader)
+                columns = set(reader.fieldnames or [])
 
     required_columns = {
         "campaign_id",
@@ -52,7 +69,7 @@ def analyze_campaign_performance(csv_path: str | None = None) -> dict:
         return {
             "error": "missing_required_columns",
             "missing_columns": sorted(missing),
-            "source_path": str(source_path),
+            "source_path": source_reference,
         }
 
     normalized_rows = []
@@ -123,5 +140,5 @@ def analyze_campaign_performance(csv_path: str | None = None) -> dict:
         "campaigns": campaign_rows,
         "best_campaign_by_roas": best_by_roas,
         "weakest_campaign_by_roas": weakest_by_roas,
-        "source_path": str(source_path),
+        "source_path": source_reference,
     }

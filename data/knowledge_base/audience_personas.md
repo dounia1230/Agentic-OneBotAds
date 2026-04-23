@@ -187,3 +187,9 @@ When the assistant answers persona questions, it should prefer:
 - pains before demographics
 - buying triggers before vague summaries
 - messaging angles before generic audience descriptions
+
+## Web-Scale Audience Signals
+
+With real-time web search capabilities enabled, personas should be dynamically augmented against current search trends:
+- If a persona's pain points are evolving (e.g., new ad platform rules causing fatigue), web search will surface these in real-time.
+- Combine static persona guidelines with real-time news to ensure maximum relevancy and CTR.

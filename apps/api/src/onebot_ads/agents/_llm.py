@@ -12,6 +12,7 @@ def build_chat_model(settings: Settings):
         temperature=settings.llm_temperature,
         num_predict=900,
         validate_model_on_init=False,
+        format="json",
     )
 
 

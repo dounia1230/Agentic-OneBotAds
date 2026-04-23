@@ -2,6 +2,8 @@
 
 Agentic OneBotAds is a local-first multi-agent advertising assistant. It retrieves private brand context with RAG, analyzes campaign performance, drafts ad copy, generates image prompts, runs compliance checks, and assembles publication-ready outputs for review.
 
+The web app now includes a unified `Marketing Assistant` workspace that can take one request, optional campaign CSV data, and return a combined multi-agent response covering analysis, optimization, copy, publication assets, and reports. Optimization and image generation now consume richer cross-agent context, so recommendations can reflect campaign breakdown plus brand guidance, and image prompts can reflect campaign goal, headline, CTA, and brand constraints instead of a generic template alone.
+
 ## Stack
 
 - Python and FastAPI for the backend
@@ -183,6 +185,8 @@ Example assistant payload:
   "platform": "Instagram",
   "audience": "parents and gift buyers",
   "goal": "increase first-time sales",
+  "campaign_csv_content": "campaign_id,impressions,clicks,spend,conversions,revenue\n...",
+  "campaign_csv_filename": "spring_launch.csv",
   "knowledge_scope": {
     "brand_name": "CuddleNest Plushies",
     "campaign_name": "Spring Launch"

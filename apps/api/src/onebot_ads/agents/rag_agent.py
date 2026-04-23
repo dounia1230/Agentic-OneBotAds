@@ -31,12 +31,14 @@ Rules:
 1. Do not invent brand facts.
 2. If the knowledge base does not contain enough information, say what is missing.
 3. Return concise but useful context for downstream agents.
-4. When possible, return the answer as structured JSON with:
+4. Do not mention file names, source documents, or where the information came from inside the answer text.
+5. When possible, return the answer as structured JSON with:
    - answer
    - relevant_context
    - source_documents
    - confidence
 """.strip()
+
 
 
 class RAGMarketingKnowledgeAgent:
@@ -48,8 +50,31 @@ class RAGMarketingKnowledgeAgent:
         self,
         question: str,
         knowledge_scope: KnowledgeScope | None = None,
+        use_web_search: bool = False,
     ) -> RAGAgentResponse:
         snippets = self.knowledge_base.retrieve(question, top_k=4, scope=knowledge_scope)
+
+        if use_web_search:
+            try:
+                from langchain_community.utilities import SerpAPIWrapper
+                if not self.settings.serpapi_api_key:
+                    raise ValueError("SERPAPI_API_KEY is missing")
+                search = SerpAPIWrapper(serpapi_api_key=self.settings.serpapi_api_key)
+                search_result = search.run(question)
+                if isinstance(search_result, str) and search_result.startswith("[") and search_result.endswith("]"):
+                    import ast
+                    try:
+                        parsed = ast.literal_eval(search_result)
+                        if isinstance(parsed, list):
+                            search_result = "\n".join(f"- {str(item)}" for item in parsed)
+                    except Exception:
+                        pass
+                Snippet = type("Snippet", (), {"source": "Web Search (SerpAPI)", "excerpt": search_result})
+                snippets.insert(0, Snippet())
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Web search failed: {e}")
+
         if not snippets:
             return RAGAgentResponse(
                 answer=(
@@ -63,17 +88,21 @@ class RAGMarketingKnowledgeAgent:
 
         if self.settings.enable_live_llm:
             try:
-                return self._summarize_with_llm(question, snippets)
-            except Exception:
+                return self._sanitize_response(self._summarize_with_llm(question, snippets))
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"LLM summary failed: {e}")
                 pass
 
         source_documents = list(dict.fromkeys(snippet.source for snippet in snippets))
         relevant_context = self._build_relevant_context(snippets)
-        return RAGAgentResponse(
-            answer=self._build_fallback_answer(question, source_documents, relevant_context),
-            relevant_context=relevant_context,
-            source_documents=source_documents,
-            confidence="medium" if len(snippets) > 1 else "low",
+        return self._sanitize_response(
+            RAGAgentResponse(
+                answer=self._build_fallback_answer(question, relevant_context),
+                relevant_context=relevant_context,
+                source_documents=source_documents,
+                confidence="medium" if len(snippets) > 1 else "low",
+            )
         )
 
     def _summarize_with_llm(self, question: str, snippets) -> RAGAgentResponse:
@@ -91,8 +120,11 @@ class RAGMarketingKnowledgeAgent:
                         Retrieved snippets:
                         {snippets}
 
-                        Return only valid JSON with keys:
-                        answer, relevant_context, source_documents, confidence
+                        Return ONLY a raw JSON object. Do not wrap it in markdown block quotes. Use these exact keys:
+                        - "answer" (string)
+                        - "relevant_context" (array of strings)
+                        - "source_documents" (array of strings)
+                        - "confidence" (string, must be "high", "medium", or "low")
                         """
                     ).strip(),
                 ),
@@ -107,6 +139,10 @@ class RAGMarketingKnowledgeAgent:
         )
         payload = extract_json_payload(getattr(response, "content", str(response)))
         return RAGAgentResponse.model_validate(payload)
+
+    def _sanitize_response(self, response: RAGAgentResponse) -> RAGAgentResponse:
+        response.answer = self._sanitize_answer_text(response.answer)
+        return response
 
     @staticmethod
     def _clean_excerpt(excerpt: str) -> str:
@@ -127,7 +163,6 @@ class RAGMarketingKnowledgeAgent:
     def _build_fallback_answer(
         self,
         question: str,
-        source_documents: list[str],
         relevant_context: list[str],
     ) -> str:
         lowered = question.lower()
@@ -136,9 +171,9 @@ class RAGMarketingKnowledgeAgent:
             if brand_advice:
                 return brand_advice
 
-        summary_lines = ["Grounded context found in the knowledge base:"]
-        for source, excerpt in zip(source_documents, relevant_context, strict=False):
-            summary_lines.append(f"- {source}: {excerpt}")
+        summary_lines = ["I found the following information:"]
+        for excerpt in relevant_context:
+            summary_lines.append(f"\n{excerpt}")
         return "\n".join(summary_lines)
 
     def _build_brand_advice_fallback(self, question: str) -> str:
@@ -176,10 +211,47 @@ class RAGMarketingKnowledgeAgent:
         if not lines:
             return ""
 
-        lines.append("Sources:")
-        lines.append("- audience_personas.md")
-        lines.append("- brand_guidelines.md")
         return "\n".join(lines)
+
+    @staticmethod
+    def _sanitize_answer_text(answer: str) -> str:
+        cleaned_lines: list[str] = []
+        skip_source_block = False
+
+        for raw_line in answer.splitlines():
+            line = raw_line.strip()
+            if not line:
+                if not skip_source_block and cleaned_lines and cleaned_lines[-1]:
+                    cleaned_lines.append("")
+                continue
+
+            lowered = line.lower()
+            if lowered in {"sources:", "source:", "source documents:", "source document:"}:
+                skip_source_block = True
+                continue
+
+            if skip_source_block:
+                if re.match(r"^[-*]\s+.+\.(md|txt|csv|json|pdf)\b", line, flags=re.IGNORECASE):
+                    continue
+                skip_source_block = False
+
+            line = re.sub(
+                r"^[-*]\s+[A-Za-z0-9_./ -]+\.(md|txt|csv|json|pdf)\s*:\s*",
+                "- ",
+                line,
+                flags=re.IGNORECASE,
+            )
+            line = re.sub(
+                r"\b(?:from|according to)\s+[A-Za-z0-9_./ -]+\.(md|txt|csv|json|pdf)\b[:,]?\s*",
+                "",
+                line,
+                flags=re.IGNORECASE,
+            ).strip()
+
+            if line:
+                cleaned_lines.append(line)
+
+        return "\n".join(cleaned_lines).strip()
 
     def _read_knowledge_file(self, source_name: str) -> str:
         path = Path(self.settings.knowledge_base_directory) / source_name

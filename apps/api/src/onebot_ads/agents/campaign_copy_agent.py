@@ -287,7 +287,7 @@ class CampaignCopyAgent:
         ]
 
         if brief.generate_image_prompt or brief.generate_image or brief.compose_publication_image:
-            response.image_prompt = self._build_image_payload(brief, response.variants)
+            response.image_prompt = self._build_image_payload(brief, response.variants, context)
 
         response.warnings = warnings
         response.compliance_issues = list(dict.fromkeys(compliance_issues))
@@ -298,6 +298,7 @@ class CampaignCopyAgent:
         self,
         brief: CampaignBrief,
         variants: list[AdVariant],
+        context: list[ContextSnippet],
     ) -> ImagePrompt:
         provider, normalization_note = normalize_image_provider(
             brief.image_provider or self.settings.image_provider,
@@ -307,6 +308,17 @@ class CampaignCopyAgent:
             product_name=brief.product_name,
             audience=brief.audience,
             platform="/".join(brief.channels) if brief.channels else "linkedin",
+            goal=brief.goal,
+            style=(
+                "modern editorial marketing, clear hierarchy, strong offer framing, "
+                "brand-safe and conversion-focused"
+            ),
+            headline=variants[0].headline if variants else None,
+            cta=variants[0].cta if variants else None,
+            brand_context=" ".join(snippet.excerpt for snippet in context[:2]) or None,
+            offer=brief.offer,
+            key_points=brief.key_points,
+            brand_constraints=brief.brand_constraints,
         )
         notes: list[str] = []
         if normalization_note:

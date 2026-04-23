@@ -2,10 +2,16 @@ import { ChangeEvent, FormEvent, useLayoutEffect, useRef, useState } from "react
 
 import { SectionIntro } from "../../../components/ui/SectionIntro";
 import { useScrollIntoViewOnChange } from "../../../hooks/useScrollIntoViewOnChange";
+import { canPreviewImage, resolveMediaUrl } from "../../../lib/media";
 import { PLATFORM_OPTIONS } from "../../../lib/platforms";
-import { runAssistant } from "../../../services/api/onebot";
-import type { PublicationPackage } from "../../../types/api";
+import { draftCampaign, runAssistant } from "../../../services/api/onebot";
+import type {
+  CampaignDraftResponse,
+  ImageGenerationResponse,
+  PublicationPackage,
+} from "../../../types/api";
 import {
+  buildCampaignDraftPayload,
   buildPublicationRequestMessage,
   defaultPublicationForm,
   derivePublicationOutput,
@@ -557,9 +563,12 @@ export function PublicationGeneratorTab() {
   const previousShellRectRef = useRef<DOMRect | null>(null);
   const [form, setForm] = useState<PublicationFormValues>(defaultPublicationForm);
   const [publication, setPublication] = useState<PublicationPackage | null>(null);
+  const [campaignDraft, setCampaignDraft] = useState<CampaignDraftResponse | null>(null);
+  const [imageResult, setImageResult] = useState<ImageGenerationResponse | null>(null);
   const [reviewNotes, setReviewNotes] = useState<string[]>([]);
   const [complianceIssues, setComplianceIssues] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastGeneratedFormSignature, setLastGeneratedFormSignature] = useState<string | null>(null);
@@ -569,9 +578,13 @@ export function PublicationGeneratorTab() {
   const hasRequiredValues =
     isFilled(form.productName) && isFilled(form.platform) && isFilled(form.audience) && isFilled(form.goal);
   const canGenerate = hasRequiredValues && !isSubmitting && !hasGeneratedCurrentPublication;
-  const hasCompletedPublication = Boolean(publication) || Boolean(error);
+  const hasCompletedPublication =
+    Boolean(publication) || Boolean(campaignDraft) || Boolean(error) || Boolean(draftError);
+  const publicationPreviewUrl = resolveMediaUrl(
+    publication?.image_url ?? imageResult?.image_url ?? publication?.image_path ?? imageResult?.image_path,
+  );
 
-  useScrollIntoViewOnChange(resultsRef, publication ?? error);
+  useScrollIntoViewOnChange(resultsRef, publication ?? campaignDraft ?? error ?? draftError);
 
   useLayoutEffect(() => {
     const shell = shellRef.current;
@@ -620,9 +633,12 @@ export function PublicationGeneratorTab() {
       [target.name]: value,
     }));
     setPublication(null);
+    setCampaignDraft(null);
+    setImageResult(null);
     setReviewNotes([]);
     setComplianceIssues([]);
     setActionMessage("");
+    setDraftError(null);
     setLastGeneratedFormSignature(null);
   }
 
@@ -693,6 +709,7 @@ export function PublicationGeneratorTab() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setDraftError(null);
 
     if (!hasRequiredValues) {
       setError("Fill in product name, platform, audience, and goal before generating a publication.");
@@ -702,12 +719,32 @@ export function PublicationGeneratorTab() {
     setIsSubmitting(true);
     const submittedFormSignature = currentFormSignature;
 
-    const [assistantResult] = await Promise.allSettled([
-      runAssistant({ message: buildPublicationRequestMessage(form) }),
+    const [assistantResult, campaignDraftResult] = await Promise.allSettled([
+      runAssistant({
+        message: buildPublicationRequestMessage(form),
+        product_name: form.productName,
+        audience: form.audience,
+        goal: form.goal,
+        platform: form.platform,
+      }),
+      draftCampaign(buildCampaignDraftPayload(form)),
     ]);
+
+    if (campaignDraftResult.status === "fulfilled") {
+      setCampaignDraft(campaignDraftResult.value);
+      setDraftError(null);
+    } else {
+      setCampaignDraft(null);
+      setDraftError(
+        campaignDraftResult.reason instanceof Error
+          ? campaignDraftResult.reason.message
+          : "Unable to generate campaign draft variants.",
+      );
+    }
 
     if (assistantResult.status === "rejected") {
       setPublication(null);
+      setImageResult(null);
       setReviewNotes([]);
       setComplianceIssues([]);
       setLastGeneratedFormSignature(null);
@@ -717,6 +754,7 @@ export function PublicationGeneratorTab() {
     }
 
     const nextPublication = derivePublicationOutput(assistantResult.value, form);
+    setImageResult(assistantResult.value.image ?? null);
 
     if (!nextPublication) {
       setPublication(null);
@@ -736,6 +774,9 @@ export function PublicationGeneratorTab() {
         : null,
       form.generateImage && !isFilled(nextPublication.alt_text ?? "")
         ? "Image guidance was requested, but no alt text was returned."
+        : null,
+      form.generateImage && assistantResult.value.image?.status === "generation_failed"
+        ? `Image generation failed: ${assistantResult.value.image.error ?? "Unknown provider error"}.`
         : null,
       isBlockingPublicationStatus(nextPublication.status) ? `Generation status: ${formatStatusLabel(nextPublication.status)}.` : null,
       isBlockingPublicationStatus(nextPublication.compliance_status)
@@ -798,7 +839,7 @@ export function PublicationGeneratorTab() {
                   checked={form.generateImage}
                   onChange={handleFieldChange}
                 />
-                Generate image guidance in the package.
+                Generate the publication image in this workflow.
               </label>
 
               <div className="form-actions form-actions-center">
@@ -828,134 +869,246 @@ export function PublicationGeneratorTab() {
           </div>
         ) : null}
 
-        {publication ? (
+        {publication || campaignDraft ? (
           <div ref={resultsRef} className="result-stack staged-tab-results publication-report">
-          <header className="report-header">
-            <p className="eyebrow">Publication Draft</p>
-            <h3>{publication.headline}</h3>
-            <p className="report-deck">{publication.platform} post for {form.audience}</p>
-            <dl className="report-meta" aria-label="Publication metadata">
-              <div>
-                <dt>Platform</dt>
-                <dd>{publication.platform}</dd>
-              </div>
-              <div>
-                <dt>Goal</dt>
-                <dd>{form.goal}</dd>
-              </div>
-              <div>
-                <dt>Recommended Time</dt>
-                <dd>{publication.recommended_schedule}</dd>
-              </div>
-            </dl>
-          </header>
+            {publication ? (
+              <header className="report-header">
+                <p className="eyebrow">Publication Draft</p>
+                <h3>{publication.headline}</h3>
+                <p className="report-deck">{publication.platform} post for {form.audience}</p>
+                <dl className="report-meta" aria-label="Publication metadata">
+                  <div>
+                    <dt>Platform</dt>
+                    <dd>{publication.platform}</dd>
+                  </div>
+                  <div>
+                    <dt>Goal</dt>
+                    <dd>{form.goal}</dd>
+                  </div>
+                  <div>
+                    <dt>Recommended Time</dt>
+                    <dd>{publication.recommended_schedule}</dd>
+                  </div>
+                </dl>
+              </header>
+            ) : null}
 
-          {reviewNotes.length > 0 ? (
-            <section className="warning-card" aria-labelledby="publication-review-heading">
-              <p className="eyebrow">Review Recommended</p>
-              <h4 id="publication-review-heading">Publication available with revision notes</h4>
-              <ul className="bullet-list">
-                {reviewNotes.map((note) => (
-                  <li key={note}>{note}</li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
+            {reviewNotes.length > 0 ? (
+              <section className="warning-card" aria-labelledby="publication-review-heading">
+                <p className="eyebrow">Review Recommended</p>
+                <h4 id="publication-review-heading">Publication available with revision notes</h4>
+                <ul className="bullet-list">
+                  {reviewNotes.map((note) => (
+                    <li key={note}>{note}</li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
 
-          <section className="publication-article" aria-labelledby="publication-article-heading">
-            <p className="eyebrow">Ready-to-publish copy</p>
-            <h4 id="publication-article-heading">{publication.headline}</h4>
-            <p>{publication.caption}</p>
-            <p className="publication-cta">{publication.cta}</p>
-            <p className="publication-tags">{publication.hashtags.join(" ")}</p>
-          </section>
-
-          {form.generateImage ? (
-            <section className="report-section" aria-labelledby="publication-brief-heading">
-              <div className="report-section-heading">
-                <h4 id="publication-brief-heading">Creative Brief</h4>
-              </div>
-
-              <dl className="report-fields">
-                <div className="report-field report-field-wide">
-                  <dt>Image Prompt</dt>
-                  <dd>{publication.image_prompt}</dd>
+            {campaignDraft ? (
+              <section className="report-section" aria-labelledby="campaign-draft-heading">
+                <div className="report-section-heading">
+                  <p className="eyebrow">Campaign Draft</p>
+                  <h4 id="campaign-draft-heading">Channel-ready variants</h4>
                 </div>
-                <div className="report-field">
-                  <dt>Alt Text</dt>
-                  <dd>{publication.alt_text}</dd>
+
+                <p>{campaignDraft.summary}</p>
+
+                <div className="draft-variant-list" aria-label="Campaign draft variants">
+                  {campaignDraft.variants.map((variant) => (
+                    <article key={`${variant.channel}-${variant.headline}`} className="draft-variant-card">
+                      <p className="eyebrow">{variant.channel}</p>
+                      <h5>{variant.headline}</h5>
+                      <p>{variant.primary_text}</p>
+                      <p className="publication-cta">{variant.cta}</p>
+                      <p>{variant.rationale}</p>
+                    </article>
+                  ))}
                 </div>
-                <div className="report-field">
-                  <dt>Asset Status</dt>
-                  <dd>
-                    {publication.image_path
-                      ? `Image file: ${publication.image_path}`
-                      : "Design asset pending; use the prompt above for production."}
-                  </dd>
+
+                {campaignDraft.image_prompt ? (
+                  <dl className="report-fields">
+                    <div className="report-field report-field-wide">
+                      <dt>Draft Image Prompt</dt>
+                      <dd>{campaignDraft.image_prompt.prompt}</dd>
+                    </div>
+                    <div className="report-field">
+                      <dt>Provider</dt>
+                      <dd>{campaignDraft.image_prompt.provider}</dd>
+                    </div>
+                    <div className="report-field">
+                      <dt>Status</dt>
+                      <dd>{campaignDraft.image_prompt.status}</dd>
+                    </div>
+                  </dl>
+                ) : null}
+              </section>
+            ) : null}
+
+            {campaignDraft?.warnings.length ? (
+              <section className="warning-card">
+                <p className="eyebrow">Draft Warnings</p>
+                <ul className="bullet-list">
+                  {campaignDraft.warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
+            {campaignDraft?.compliance_issues.length ? (
+              <section className="warning-card">
+                <p className="eyebrow">Draft Compliance Notes</p>
+                <ul className="bullet-list">
+                  {campaignDraft.compliance_issues.map((issue) => (
+                    <li key={issue}>{issue}</li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
+            {draftError ? (
+              <section className="warning-card">
+                <p className="eyebrow">Draft API</p>
+                <p>{draftError}</p>
+              </section>
+            ) : null}
+
+            {publication ? (
+              <>
+                <section className="publication-article" aria-labelledby="publication-article-heading">
+                  <p className="eyebrow">Ready-to-publish copy</p>
+                  <h4 id="publication-article-heading">{publication.headline}</h4>
+                  <p>{publication.caption}</p>
+                  <p className="publication-cta">{publication.cta}</p>
+                  <p className="publication-tags">{publication.hashtags.join(" ")}</p>
+                </section>
+
+                {form.generateImage ? (
+                  <section className="report-section" aria-labelledby="publication-brief-heading">
+                    <div className="report-section-heading">
+                      <h4 id="publication-brief-heading">Creative Brief</h4>
+                    </div>
+
+                    <dl className="report-fields">
+                      <div className="report-field report-field-wide">
+                        <dt>Image Prompt</dt>
+                        <dd>{publication.image_prompt}</dd>
+                      </div>
+                      <div className="report-field">
+                        <dt>Alt Text</dt>
+                        <dd>{publication.alt_text}</dd>
+                      </div>
+                      <div className="report-field">
+                        <dt>Asset Status</dt>
+                        <dd>
+                          {imageResult?.status ?? (publication.image_path ? "generated" : "prompt_only")}
+                        </dd>
+                      </div>
+                      <div className="report-field">
+                        <dt>Provider</dt>
+                        <dd>{imageResult?.provider ?? "Not provided"}</dd>
+                      </div>
+                      <div className="report-field report-field-wide">
+                        <dt>Image File</dt>
+                        <dd>
+                          {publication.image_path
+                            ? publication.image_path
+                            : "Design asset pending; use the prompt above for production."}
+                        </dd>
+                      </div>
+                    </dl>
+
+                    {imageResult?.error ? (
+                      <div className="warning-card guidance-card">
+                        <p className="eyebrow">Image Error</p>
+                        <p>{imageResult.error}</p>
+                      </div>
+                    ) : null}
+
+                    {imageResult?.notes.length ? (
+                      <div className="warning-card guidance-card">
+                        <p className="eyebrow">Image Notes</p>
+                        <ul className="bullet-list">
+                          {imageResult.notes.map((note) => (
+                            <li key={note}>{note}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+
+                    {canPreviewImage(
+                      publication?.image_url ?? imageResult?.image_url ?? publication?.image_path ?? imageResult?.image_path,
+                    ) && publicationPreviewUrl ? (
+                      <div className="detail-card guidance-card">
+                        <p className="eyebrow">Preview</p>
+                        <img className="image-preview" src={publicationPreviewUrl} alt={publication.alt_text ?? ""} />
+                      </div>
+                    ) : null}
+                  </section>
+                ) : null}
+
+                <section className="report-section" aria-labelledby="publication-notes-heading">
+                  <div className="report-section-heading">
+                    <h4 id="publication-notes-heading">Recommendations</h4>
+                  </div>
+
+                  {publication.optimization_notes.length > 0 ? (
+                    <ul className="bullet-list">
+                      {publication.optimization_notes.map((note) => (
+                        <li key={note}>{note}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>Review the copy against the campaign goal, audience fit, and platform tone before scheduling.</p>
+                  )}
+                </section>
+
+                {complianceIssues.length > 0 ? (
+                  <section className="warning-card">
+                    <p className="eyebrow">Compliance Notes</p>
+                    <ul className="bullet-list">
+                      {complianceIssues.map((issue) => (
+                        <li key={issue}>{issue}</li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null}
+
+                <div className="report-actions" aria-label="Report actions">
+                  <button
+                    className="report-icon-button"
+                    type="button"
+                    onClick={() => {
+                      void handleCopyReport();
+                    }}
+                    aria-label="Copy formatted report"
+                    title="Copy formatted report"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <rect x="9" y="9" width="11" height="11" rx="2" />
+                      <path d="M7 15H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1" />
+                    </svg>
+                  </button>
+                  <button
+                    className="report-icon-button"
+                    type="button"
+                    onClick={handleDownloadPdf}
+                    aria-label="Download report as PDF"
+                    title="Download report as PDF"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 3v11" />
+                      <path d="m7 10 5 5 5-5" />
+                      <path d="M5 20h14" />
+                    </svg>
+                  </button>
                 </div>
-              </dl>
-            </section>
-          ) : null}
-
-          <section className="report-section" aria-labelledby="publication-notes-heading">
-            <div className="report-section-heading">
-              <h4 id="publication-notes-heading">Recommendations</h4>
-            </div>
-
-            {publication.optimization_notes.length > 0 ? (
-              <ul className="bullet-list">
-                {publication.optimization_notes.map((note) => (
-                  <li key={note}>{note}</li>
-                ))}
-              </ul>
-            ) : (
-              <p>Review the copy against the campaign goal, audience fit, and platform tone before scheduling.</p>
-            )}
-          </section>
-
-          {complianceIssues.length > 0 ? (
-            <section className="warning-card">
-              <p className="eyebrow">Compliance Notes</p>
-              <ul className="bullet-list">
-                {complianceIssues.map((issue) => (
-                  <li key={issue}>{issue}</li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          <div className="report-actions" aria-label="Report actions">
-            <button
-              className="report-icon-button"
-              type="button"
-              onClick={() => {
-                void handleCopyReport();
-              }}
-              aria-label="Copy formatted report"
-              title="Copy formatted report"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="9" y="9" width="11" height="11" rx="2" />
-                <path d="M7 15H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1" />
-              </svg>
-            </button>
-            <button
-              className="report-icon-button"
-              type="button"
-              onClick={handleDownloadPdf}
-              aria-label="Download report as PDF"
-              title="Download report as PDF"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 3v11" />
-                <path d="m7 10 5 5 5-5" />
-                <path d="M5 20h14" />
-              </svg>
-            </button>
-          </div>
-          <p className="report-action-status" aria-live="polite">
-            {actionMessage}
-          </p>
+                <p className="report-action-status" aria-live="polite">
+                  {actionMessage}
+                </p>
+              </>
+            ) : null}
           </div>
         ) : null}
       </div>

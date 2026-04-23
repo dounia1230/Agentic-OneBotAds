@@ -6,10 +6,39 @@ from gradio_client.exceptions import AppError
 from onebot_ads.tools.image_tools import (
     QWEN_IMAGE_PROVIDER,
     _format_exception_details,
+    build_publication_background_prompt,
     generate_ad_image,
     generate_background_image,
 )
 from onebot_ads.tools.path_tools import to_outputs_url
+
+
+def test_build_publication_background_prompt_uses_richer_context() -> None:
+    spec = build_publication_background_prompt(
+        product_name="Agentic OneBotAds",
+        audience="SMEs and marketing teams",
+        platform="LinkedIn",
+        goal="increase qualified leads",
+        style="modern editorial SaaS advertising with clean hierarchy",
+        headline="Smarter campaign execution for SMEs",
+        cta="Book a demo",
+        brand_context="Use direct, practical, and credible messaging.",
+        performance_context=["Scale cues from ALT003, the current best campaign."],
+        optimization_context=["Increase budget on ALT003 by 15-20%."],
+        offer="7-day pilot",
+        key_points=["faster launches", "brand-safe drafts"],
+        brand_constraints=["avoid hype", "no guaranteed outcomes"],
+    )
+
+    assert "increase qualified leads" in spec["prompt"]
+    assert "Smarter campaign execution for SMEs" in spec["prompt"]
+    assert "Book a demo" in spec["prompt"]
+    assert "Scale cues from ALT003" in spec["prompt"]
+    assert "avoid hype" in spec["prompt"]
+    assert spec["alt_text"] == (
+        "LinkedIn campaign visual for Agentic OneBotAds aimed at SMEs and marketing teams, "
+        "supporting a goal to increase qualified leads."
+    )
 
 
 def test_generate_ad_image_uses_qwen_huggingface_space(
@@ -138,7 +167,10 @@ def test_generate_background_image_returns_failure_when_qwen_errors(
     assert "Space unavailable" in result["error"]
 
 
-def test_generate_background_image_returns_failure_when_disabled(tmp_path: Path, monkeypatch) -> None:
+def test_generate_background_image_returns_failure_when_disabled(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
     class StubSettings:
         enable_image_generation = False
         image_provider = QWEN_IMAGE_PROVIDER

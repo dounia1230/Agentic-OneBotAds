@@ -87,7 +87,7 @@
 ## Image Generation Agent
 
 - Purpose: generates a detailed image prompt, negative prompt, alt text, and optionally an image file.
-- Input: product, audience, platform, goal, style, and whether actual image generation was requested.
+- Input: product, audience, platform, goal, style, current creative cues such as headline and CTA, plus optional brand, performance, and optimization context.
 - Output: `image_prompt`, `negative_prompt`, `alt_text`, `image_path`, `status`, `notes`.
 - When to call: publication flows that include a visual request.
 - System prompt summary: create prompt specs for ads and only claim generation if the tool returns a real file path.
@@ -127,7 +127,7 @@
 ## Optimization Strategy Agent
 
 - Purpose: converts analytics into budget, audience, creative, and experiment recommendations.
-- Input: campaign analysis plus optional RAG context.
+- Input: campaign analysis plus optional RAG context, request context, and available creative output so recommendations can align with the actual campaign direction.
 - Output: quick wins, strategic changes, and A/B tests with priorities.
 - When to call: after analysis or inside reporting.
 - System prompt summary: justify recommendations with ROAS, CPA, CTR, and conversion rate, and separate quick wins from longer changes.

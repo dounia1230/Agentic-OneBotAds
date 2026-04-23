@@ -1,8 +1,8 @@
 export const workspaceTabs = [
+  { id: "marketing-assistant", label: "Marketing Assistant" },
   { id: "campaign-analysis", label: "Campaign Analysis" },
   { id: "publication-generator", label: "Publication Generator" },
   { id: "knowledge-base-qa", label: "Knowledge Base Q&A" },
-  { id: "image-prompt", label: "Image Prompt" },
 ] as const;
 
 export type WorkspaceTabId = (typeof workspaceTabs)[number]["id"];

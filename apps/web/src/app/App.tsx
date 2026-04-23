@@ -2,8 +2,11 @@ import { useState } from "react";
 
 import { TabNav } from "../components/ui/TabNav";
 import { CampaignAnalysisTab } from "../features/campaign-analysis/components/CampaignAnalysisTab";
-import { ImagePromptTab } from "../features/image-prompt/components/ImagePromptTab";
 import { KnowledgeBaseTab } from "../features/knowledge-base/components/KnowledgeBaseTab";
+import {
+  MarketingAssistantTab,
+  type SharedCampaignCsv,
+} from "../features/marketing-assistant/components/MarketingAssistantTab";
 import { PublicationGeneratorTab } from "../features/publication-generator/components/PublicationGeneratorTab";
 import {
   getWorkspacePanelId,
@@ -12,24 +15,40 @@ import {
   type WorkspaceTabId,
 } from "./workspaceTabs";
 
-function renderWorkspaceTab(tabId: WorkspaceTabId) {
+function renderWorkspaceTab(
+  tabId: WorkspaceTabId,
+  campaignCsv: SharedCampaignCsv | null,
+  setCampaignCsv: (campaignCsv: SharedCampaignCsv | null) => void,
+  setActiveTab: (tabId: WorkspaceTabId) => void,
+) {
   switch (tabId) {
+    case "marketing-assistant":
+      return (
+        <MarketingAssistantTab
+          campaignCsv={campaignCsv}
+          onCampaignCsvChange={setCampaignCsv}
+        />
+      );
     case "campaign-analysis":
-      return <CampaignAnalysisTab />;
+      return (
+        <CampaignAnalysisTab
+          campaignCsv={campaignCsv}
+          onOpenMarketingAssistant={() => setActiveTab("marketing-assistant")}
+        />
+      );
     case "publication-generator":
       return <PublicationGeneratorTab />;
     case "knowledge-base-qa":
       return <KnowledgeBaseTab />;
-    case "image-prompt":
-      return <ImagePromptTab />;
     default:
       return null;
   }
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<WorkspaceTabId>("campaign-analysis");
+  const [activeTab, setActiveTab] = useState<WorkspaceTabId>("marketing-assistant");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [campaignCsv, setCampaignCsv] = useState<SharedCampaignCsv | null>(null);
 
   return (
     <div className={`shell app-shell ${isSidebarCollapsed ? "is-sidebar-collapsed" : ""}`}>
@@ -61,14 +80,22 @@ export default function App() {
       </aside>
 
       <main className="workspace workspace-single">
-        <section
-          id={getWorkspacePanelId(activeTab)}
-          className="workspace-panel tabpanel"
-          role="tabpanel"
-          aria-labelledby={getWorkspaceTabId(activeTab)}
-        >
-          {renderWorkspaceTab(activeTab)}
-        </section>
+        {workspaceTabs.map((tab) => {
+          const isActive = tab.id === activeTab;
+
+          return (
+            <section
+              key={tab.id}
+              id={getWorkspacePanelId(tab.id)}
+              className="workspace-panel tabpanel"
+              role="tabpanel"
+              aria-labelledby={getWorkspaceTabId(tab.id)}
+              hidden={!isActive}
+            >
+              {renderWorkspaceTab(tab.id, campaignCsv, setCampaignCsv, setActiveTab)}
+            </section>
+          );
+        })}
       </main>
     </div>
   );

@@ -15,10 +15,13 @@ class AssistantRequest(BaseModel):
     audience: str | None = Field(default=None, max_length=240)
     goal: str | None = Field(default=None, max_length=240)
     platform: str | None = Field(default=None, max_length=80)
+    campaign_csv_content: str | None = None
+    campaign_csv_filename: str | None = Field(default=None, max_length=240)
     knowledge_scope: KnowledgeScope | None = None
     run_all_agents: bool = False
     save_output: bool = False
     export_report: bool = False
+    use_web_search: bool = False
 
 
 class RAGAgentResponse(BaseModel):

@@ -95,6 +95,12 @@ Prefer adding documents that answer:
 
 When the assistant is asked for strategy, it should combine this file with:
 - audience personas
-- product catalog
 - previous ads examples
 - platform ads rules
+
+## Web Search Augmentation Strategy
+
+When knowledge base files are insufficient to answer niche or up-to-date marketing queries (e.g., recent platform updates, trending hashtags, or emerging competitor strategies), the system supports real-time Web Search via SerpAPI.
+- **Triggering:** Use the Web Search toggle in the UI.
+- **Best Use Cases:** Validating trends, finding current examples of ads, fetching real-time compliance news.
+- **Integration:** Web search results are appended alongside grounded context to provide a robust, comprehensive answer to the creative workflow.

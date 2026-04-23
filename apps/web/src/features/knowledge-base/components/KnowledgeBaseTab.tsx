@@ -1,8 +1,12 @@
-import { FormEvent, KeyboardEvent, useLayoutEffect, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { useScrollIntoViewOnChange } from "../../../hooks/useScrollIntoViewOnChange";
-import { runAssistant } from "../../../services/api/onebot";
-import type { AssistantResponse } from "../../../types/api";
+import {
+  runAssistant,
+} from "../../../services/api/onebot";
+import type {
+  AssistantResponse,
+} from "../../../types/api";
 
 function ArrowUpIcon() {
   return (
@@ -11,6 +15,19 @@ function ArrowUpIcon() {
       <path d="m6 11 6-6 6 6" />
     </svg>
   );
+}
+
+function formatText(text: string) {
+  const parts = text.split(/(\*\*.*?\*\*|`.*?`)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i} style={{ color: "var(--foreground)" }}>{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return <code key={i} style={{ backgroundColor: "var(--surface-sunken)", padding: "2px 4px", borderRadius: "4px" }}>{part.slice(1, -1)}</code>;
+    }
+    return part;
+  });
 }
 
 function renderKnowledgeAnswer(answer: string) {
@@ -40,11 +57,11 @@ function renderKnowledgeAnswer(answer: string) {
 
   return content.map((block, index) =>
     block.type === "paragraph" ? (
-      <p key={`paragraph-${index}`}>{block.text}</p>
+      <p key={`paragraph-${index}`}>{formatText(block.text)}</p>
     ) : (
       <ul key={`list-${index}`} className="knowledge-chat-answer-list">
         {block.items.map((item) => (
-          <li key={item}>{item}</li>
+          <li key={item}>{formatText(item)}</li>
         ))}
       </ul>
     ),
@@ -60,6 +77,7 @@ export function KnowledgeBaseTab() {
   const previousButtonRectRef = useRef<DOMRect | null>(null);
   const [question, setQuestion] = useState("");
   const [submittedQuestion, setSubmittedQuestion] = useState("");
+  const [useWebSearch, setUseWebSearch] = useState(true);
   const [response, setResponse] = useState<AssistantResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -157,7 +175,10 @@ export function KnowledgeBaseTab() {
     setIsSubmitting(true);
 
     try {
-      const nextResponse = await runAssistant({ message: nextQuestion });
+      const nextResponse = await runAssistant({ 
+        message: nextQuestion,
+        use_web_search: useWebSearch,
+      });
       setResponse(nextResponse);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to query the knowledge base.");
@@ -216,17 +237,29 @@ export function KnowledgeBaseTab() {
             aria-label="Question"
           />
 
-          <button
-            ref={buttonRef}
-            className={`knowledge-chat-submit ${hasConversationStarted ? "is-compact" : ""}`}
-            type="submit"
-            disabled={!hasQuestion || isSubmitting}
-            aria-busy={isSubmitting}
-            aria-label={isSubmitting ? "Asking" : hasConversationStarted ? "Ask question" : "Ask"}
-          >
-            {isSubmitting ? <span className="button-spinner" aria-hidden="true" /> : hasConversationStarted ? <ArrowUpIcon /> : null}
-            <span className="knowledge-chat-submit-label">{isSubmitting ? "Asking..." : "Ask"}</span>
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: "16px", alignSelf: "flex-end" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--foreground-muted)", fontSize: "0.875rem", cursor: "pointer", userSelect: "none" }}>
+              <input
+                type="checkbox"
+                checked={useWebSearch}
+                onChange={(e) => setUseWebSearch(e.target.checked)}
+                style={{ cursor: "pointer", width: "16px", height: "16px" }}
+              />
+              Web Search
+            </label>
+
+            <button
+              ref={buttonRef}
+              className={`knowledge-chat-submit ${hasConversationStarted ? "is-compact" : ""}`}
+              type="submit"
+              disabled={!hasQuestion || isSubmitting}
+              aria-busy={isSubmitting}
+              aria-label={isSubmitting ? "Asking" : hasConversationStarted ? "Ask question" : "Ask"}
+            >
+              {isSubmitting ? <span className="button-spinner" aria-hidden="true" /> : hasConversationStarted ? <ArrowUpIcon /> : null}
+              <span className="knowledge-chat-submit-label">{isSubmitting ? "Asking..." : "Ask"}</span>
+            </button>
+          </div>
         </form>
       </div>
     </div>

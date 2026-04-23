@@ -31,6 +31,8 @@ reflects the configured Hugging Face Space id.
   "platform": "Instagram",
   "audience": "parents and gift buyers",
   "goal": "increase first-time sales",
+  "campaign_csv_content": "campaign_id,impressions,clicks,spend,conversions,revenue\n...",
+  "campaign_csv_filename": "spring_launch.csv",
   "knowledge_scope": {
     "brand_name": "CuddleNest Plushies",
     "campaign_name": "Spring Launch"

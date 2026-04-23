@@ -1,4 +1,9 @@
-import type { AssistantResponse, PublicationPackage } from "../../../types/api";
+import { PLATFORM_TO_CHANNEL } from "../../../lib/platforms";
+import type {
+  AssistantResponse,
+  CampaignBrief,
+  PublicationPackage,
+} from "../../../types/api";
 
 export type PublicationFormValues = {
   productName: string;
@@ -33,8 +38,23 @@ export function buildPublicationRequestMessage(form: PublicationFormValues): str
     `Create a ${form.platform} publication for ${form.productName}.`,
     `Target audience: ${form.audience}.`,
     `Goal: ${form.goal}.`,
-    form.generateImage ? "Include an image concept and visual guidance." : "Text-only output is fine.",
+    form.generateImage
+      ? "Create the image for the publication if the backend stack allows it."
+      : "Text-only output is fine.",
   ].join(" ");
+}
+
+export function buildCampaignDraftPayload(form: PublicationFormValues): CampaignBrief {
+  return {
+    product_name: form.productName,
+    audience: form.audience,
+    goal: form.goal,
+    channels: [PLATFORM_TO_CHANNEL[form.platform] ?? "linkedin"],
+    source_context_query: `${form.productName} ${form.audience} ${form.goal}`,
+    generate_image_prompt: form.generateImage,
+    generate_image: false,
+    compose_publication_image: false,
+  };
 }
 
 export function derivePublicationOutput(
@@ -61,6 +81,7 @@ export function derivePublicationOutput(
     hashtags: creative.hashtags.length > 0 ? creative.hashtags : buildHashtags(form.productName, form.platform),
     image_prompt: image?.image_prompt ?? null,
     image_path: image?.image_path ?? null,
+    image_url: image?.image_url ?? null,
     alt_text: image?.alt_text ?? `Promotional visual for ${form.productName} targeting ${form.audience}.`,
     recommended_schedule: "Review backend recommendation",
     compliance_status: compliance ? (compliance.approved ? "approved" : "needs_revision") : "pending_review",

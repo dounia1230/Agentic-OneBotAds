@@ -3,8 +3,8 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from onebot_ads.api.dependencies import get_campaign_service
-from onebot_ads.main import app
 from onebot_ads.core.config import Settings
+from onebot_ads.main import app
 from onebot_ads.schemas.campaigns import CampaignBrief, ContextSnippet
 from onebot_ads.services.campaign_service import CampaignService
 
@@ -161,7 +161,10 @@ def test_campaign_service_draft_warns_when_rag_query_returns_no_context() -> Non
         )
     )
 
-    assert "Draft context query returned no snippets; fallback copy used only the brief." in result.warnings
+    assert (
+        "Draft context query returned no snippets; fallback copy used only the brief."
+        in result.warnings
+    )
 
 
 def test_campaign_service_reports_specific_live_llm_fallback_reason_once(monkeypatch) -> None:
@@ -235,7 +238,10 @@ def test_campaign_draft_route_returns_200_when_image_generation_fails(
                 "image_path": None,
                 "prompt": payload["prompt"],
                 "error": "qwen_image failed: rate limit",
-                "notes": ["No fallback provider is configured in the simplified local-first setup."],
+                "notes": [
+                    "No fallback provider is configured in the simplified "
+                    "local-first setup."
+                ],
                 "fallback_used": False,
                 "primary_provider": "qwen_image",
                 "fallback_provider": None,
@@ -269,3 +275,38 @@ def test_campaign_draft_route_returns_200_when_image_generation_fails(
     assert payload["image_prompt"]["status"] == "generation_failed"
     assert payload["image_prompt"]["fallback_used"] is False
     assert "qwen_image failed: rate limit" in payload["image_prompt"]["error"]
+
+
+def test_assistant_route_uses_uploaded_campaign_csv_for_analysis() -> None:
+    settings = Settings(enable_live_llm=False, enable_rag=True)
+    service = CampaignService(settings, knowledge_base=StubKnowledgeBase())
+    app.dependency_overrides[get_campaign_service] = lambda: service
+    client = TestClient(app)
+
+    try:
+        response = client.post(
+            "/api/v1/assistant/run",
+            json={
+                "message": "Analyze these campaigns and recommend optimizations.",
+                "campaign_csv_content": "\n".join(
+                    [
+                        "campaign_id,platform,audience,impressions,clicks,spend,conversions,revenue",
+                        "CAMP100,LinkedIn,SMEs,1000,50,200,5,800",
+                        "CAMP200,Instagram,Founders,1500,45,180,3,360",
+                    ]
+                ),
+                "campaign_csv_filename": "uploaded_campaigns.csv",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["analysis"]["raw_data_path"] == "uploaded_campaigns.csv"
+    assert payload["analysis"]["best_campaign"] == "CAMP100"
+    assert (
+        "Increase budget on CAMP100 by 15-20%"
+        in payload["optimization"]["quick_wins"][0]["recommendation"]
+    )
+    assert "LinkedIn" in payload["optimization"]["quick_wins"][0]["reason"]

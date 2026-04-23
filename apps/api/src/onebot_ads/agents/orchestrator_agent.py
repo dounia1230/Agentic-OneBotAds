@@ -86,10 +86,13 @@ class RequestContext:
     goal: str
     product_name: str
     knowledge_scope: KnowledgeScope | None
+    campaign_csv_content: str | None
+    campaign_csv_filename: str | None
     wants_image_prompt: bool
     wants_image_generation: bool
     wants_report_export: bool
     run_all_agents: bool
+    use_web_search: bool
 
 
 class OrchestratorAgent:
@@ -118,8 +121,11 @@ class OrchestratorAgent:
         goal: str | None = None,
         platform: str | None = None,
         knowledge_scope: KnowledgeScope | None = None,
+        campaign_csv_content: str | None = None,
+        campaign_csv_filename: str | None = None,
         run_all_agents: bool = False,
         export_report: bool = False,
+        use_web_search: bool = False,
     ) -> AssistantResponse:
         context = self._build_request_context(
             user_message,
@@ -128,8 +134,11 @@ class OrchestratorAgent:
             goal=goal,
             platform=platform,
             knowledge_scope=knowledge_scope,
+            campaign_csv_content=campaign_csv_content,
+            campaign_csv_filename=campaign_csv_filename,
             run_all_agents=run_all_agents,
             export_report=export_report,
+            use_web_search=use_web_search,
         )
         plan = self._build_plan(
             context.intent,
@@ -148,10 +157,17 @@ class OrchestratorAgent:
         publication_result = None
 
         if "rag_agent" in plan.agents_to_call:
-            rag_result = self.rag_agent.run(user_message, knowledge_scope=context.knowledge_scope)
+            rag_result = self.rag_agent.run(
+                user_message,
+                knowledge_scope=context.knowledge_scope,
+                use_web_search=context.use_web_search,
+            )
             response.rag = rag_result
         if "analyst_agent" in plan.agents_to_call:
-            analysis_result = self.analyst_agent.run()
+            analysis_result = self.analyst_agent.run(
+                csv_content=context.campaign_csv_content,
+                csv_label=context.campaign_csv_filename,
+            )
             response.analysis = analysis_result
         if "creative_agent" in plan.agents_to_call:
             creative_result = self.creative_agent.run(
@@ -164,6 +180,18 @@ class OrchestratorAgent:
                 rag_context=rag_result,
             )
             response.creative = creative_result
+        if "optimization_agent" in plan.agents_to_call:
+            optimization_result = self.optimization_agent.run(
+                analysis_result,
+                rag_result,
+                user_request=user_message,
+                platform=context.platform,
+                audience=context.audience,
+                goal=context.goal,
+                product_name=context.product_name,
+                creative=creative_result,
+            )
+            response.optimization = optimization_result
         if "image_agent" in plan.agents_to_call:
             image_result = self.image_agent.run(
                 product_name=context.product_name,
@@ -177,13 +205,13 @@ class OrchestratorAgent:
                 request_image_generation=context.wants_image_generation,
                 headline=creative_result.headline if creative_result else None,
                 cta=creative_result.cta if creative_result else None,
+                brand_context=self._build_brand_context(rag_result),
+                performance_context=self._build_performance_context(analysis_result),
+                optimization_context=self._build_optimization_context(optimization_result),
                 compose_publication_image_flag=True,
                 provider=self.settings.image_provider,
             )
             response.image = image_result
-        if "optimization_agent" in plan.agents_to_call:
-            optimization_result = self.optimization_agent.run(analysis_result, rag_result)
-            response.optimization = optimization_result
         if "compliance_agent" in plan.agents_to_call and creative_result is not None:
             compliance_result = self.compliance_agent.run(
                 creative=creative_result,
@@ -226,8 +254,8 @@ class OrchestratorAgent:
                     "rag_agent",
                     "analyst_agent",
                     "creative_agent",
-                    "image_agent",
                     "optimization_agent",
+                    "image_agent",
                     "compliance_agent",
                     "publication_agent",
                     "reporting_agent",
@@ -285,8 +313,11 @@ class OrchestratorAgent:
         goal: str | None = None,
         platform: str | None = None,
         knowledge_scope: KnowledgeScope | None = None,
+        campaign_csv_content: str | None = None,
+        campaign_csv_filename: str | None = None,
         run_all_agents: bool = False,
         export_report: bool = False,
+        use_web_search: bool = False,
     ) -> RequestContext:
         message = user_message.lower()
         intent = "ad_copy"
@@ -309,12 +340,21 @@ class OrchestratorAgent:
             user_message,
             r"(?:targeting|for)\s+([A-Za-z0-9 ,&-]+)",
         )
-        resolved_goal = goal or self._extract_value(user_message, r"(?:goal|to)\s+([A-Za-z0-9 ,&-]+)")
+        resolved_goal = goal or self._extract_value(
+            user_message,
+            r"(?:goal|to)\s+([A-Za-z0-9 ,&-]+)",
+        )
         wants_image_prompt = (
             "image" in message or "visual" in message or intent == "generate_publication"
         )
-        wants_image_generation = wants_image_prompt and (
-            "generate image" in message or "with image" in message or "create image" in message
+        wants_image_generation = wants_image_prompt and any(
+            pattern.search(message)
+            for pattern in (
+                re.compile(r"\bgenerate(?:\s+the)?\s+image\b"),
+                re.compile(r"\bcreate(?:\s+the)?\s+image\b"),
+                re.compile(r"\bwith\s+image\b"),
+                re.compile(r"\bimage\s+generation\b"),
+            )
         )
         default_goal = (
             "increase qualified leads"
@@ -330,6 +370,8 @@ class OrchestratorAgent:
             goal=resolved_goal or default_goal,
             product_name=product_name or "Agentic OneBotAds",
             knowledge_scope=knowledge_scope,
+            campaign_csv_content=campaign_csv_content,
+            campaign_csv_filename=campaign_csv_filename,
             wants_image_prompt=wants_image_prompt,
             wants_image_generation=wants_image_generation,
             wants_report_export=(
@@ -339,6 +381,7 @@ class OrchestratorAgent:
                 or "file" in message
             ),
             run_all_agents=run_all_agents,
+            use_web_search=use_web_search,
         )
 
     @staticmethod
@@ -354,3 +397,45 @@ class OrchestratorAgent:
         if not match:
             return None
         return match.group(1).strip().rstrip(".")
+
+    @staticmethod
+    def _build_brand_context(rag_result) -> str | None:
+        if rag_result is None:
+            return None
+        fragments = []
+        if rag_result.answer:
+            fragments.append(rag_result.answer)
+        fragments.extend(rag_result.relevant_context[:2])
+        return " ".join(
+            dict.fromkeys(fragment.strip() for fragment in fragments if fragment.strip())
+        )
+
+    @staticmethod
+    def _build_performance_context(analysis_result) -> list[str]:
+        if analysis_result is None:
+            return []
+        context = []
+        if analysis_result.best_campaign:
+            context.append(
+                f"Scale cues from {analysis_result.best_campaign}, the current best campaign."
+            )
+        if analysis_result.weakest_campaign:
+            context.append(
+                f"Avoid repeating the weak signals from {analysis_result.weakest_campaign}."
+            )
+        context.extend(analysis_result.insights[:2])
+        return context
+
+    @staticmethod
+    def _build_optimization_context(optimization_result) -> list[str]:
+        if optimization_result is None:
+            return []
+        context = [
+            item.recommendation
+            for item in (
+                optimization_result.quick_wins[:1]
+                + optimization_result.strategic_changes[:2]
+            )
+        ]
+        context.extend(optimization_result.ab_tests[:1])
+        return context

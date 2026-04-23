@@ -18,24 +18,137 @@ IMAGE_GENERATION_DISABLED_ERROR = "Image generation is disabled in configuration
 SUPPORTED_IMAGE_PROVIDERS = {QWEN_IMAGE_PROVIDER}
 
 
+def _clean_fragment(value: str | None, *, max_length: int = 180) -> str | None:
+    if value is None:
+        return None
+    normalized = " ".join(str(value).strip().split()).rstrip(".")
+    if not normalized:
+        return None
+    if len(normalized) <= max_length:
+        return normalized
+    return normalized[: max_length - 3].rstrip() + "..."
+
+
+def _dedupe_fragments(values: list[str]) -> list[str]:
+    return list(dict.fromkeys(value for value in values if value))
+
+
 def build_publication_background_prompt(
     *,
     product_name: str,
     audience: str,
     platform: str,
+    goal: str | None = None,
+    style: str | None = None,
+    headline: str | None = None,
+    cta: str | None = None,
+    brand_context: str | None = None,
+    performance_context: list[str] | None = None,
+    optimization_context: list[str] | None = None,
+    offer: str | None = None,
+    key_points: list[str] | None = None,
+    brand_constraints: list[str] | None = None,
 ) -> dict[str, str]:
-    prompt = (
-        "Create a brand-safe campaign visual background for "
-        f"{product_name}, aimed at {audience}, optimized for {platform} publication format. "
-        "Use a polished commercial advertising style, strong focal subject cues, clean "
-        "composition, premium lighting, soft depth, negative space for text overlay, "
-        "high quality, no text, no words, no letters, no logos, no watermark, no fake UI, "
-        "no readable labels."
+    prompt_sections = [
+        (
+            "Create a brand-safe campaign visual background for "
+            f"{product_name}, aimed at {audience}, optimized for {platform} publication format."
+        )
+    ]
+    cleaned_goal = _clean_fragment(goal)
+    cleaned_offer = _clean_fragment(offer)
+    cleaned_headline = _clean_fragment(headline)
+    cleaned_cta = _clean_fragment(cta)
+    cleaned_brand_context = _clean_fragment(brand_context, max_length=220)
+    cleaned_key_points = _dedupe_fragments(
+        [
+            fragment
+            for fragment in (_clean_fragment(item, max_length=80) for item in key_points or [])
+            if fragment
+        ][:3]
     )
+    cleaned_performance = _dedupe_fragments(
+        [
+            fragment
+            for fragment in (
+                _clean_fragment(item, max_length=140) for item in performance_context or []
+            )
+            if fragment
+        ][:2]
+    )
+    cleaned_optimization = _dedupe_fragments(
+        [
+            fragment
+            for fragment in (
+                _clean_fragment(item, max_length=140) for item in optimization_context or []
+            )
+            if fragment
+        ][:2]
+    )
+    cleaned_constraints = _dedupe_fragments(
+        [
+            fragment
+            for fragment in (
+                _clean_fragment(item, max_length=80) for item in brand_constraints or []
+            )
+            if fragment
+        ][:3]
+    )
+
+    if cleaned_goal:
+        prompt_sections.append(f"Visual objective: support a campaign designed to {cleaned_goal}.")
+    if cleaned_offer:
+        prompt_sections.append(f"Offer cue: frame the scene around {cleaned_offer}.")
+    if cleaned_key_points:
+        prompt_sections.append(
+            "Product cues to suggest visually: " + ", ".join(cleaned_key_points) + "."
+        )
+    if cleaned_headline:
+        prompt_sections.append(
+            f"Creative direction should support the headline concept \"{cleaned_headline}\"."
+        )
+    if cleaned_cta:
+        prompt_sections.append(
+            f"Leave clear composition space for a CTA such as \"{cleaned_cta}\"."
+        )
+    if cleaned_brand_context:
+        prompt_sections.append(f"Brand guidance: {cleaned_brand_context}.")
+    if cleaned_performance:
+        prompt_sections.append(
+            "Performance context to reflect visually: " + "; ".join(cleaned_performance) + "."
+        )
+    if cleaned_optimization:
+        prompt_sections.append(
+            "Optimization focus: " + "; ".join(cleaned_optimization) + "."
+        )
+    if cleaned_constraints:
+        prompt_sections.append(
+            "Brand constraints to respect: " + ", ".join(cleaned_constraints) + "."
+        )
+
+    prompt_sections.append(
+        "Use "
+        + (
+            _clean_fragment(style, max_length=180)
+            or "a polished commercial advertising style, strong focal subject cues, clean "
+            "composition, premium lighting, soft depth, and negative space for text overlay"
+        )
+        + "."
+    )
+    prompt_sections.append(
+        "High quality, campaign-ready, modern, brand-safe, no text, no words, no letters, "
+        "no logos, no watermark, no fake UI, no readable labels."
+    )
+    prompt = " ".join(prompt_sections)
+
+    alt_text = f"{platform} campaign visual for {product_name} aimed at {audience}"
+    if cleaned_goal:
+        alt_text += f", supporting a goal to {cleaned_goal}"
+    alt_text += "."
     return {
         "prompt": prompt,
         "negative_prompt": DEFAULT_NEGATIVE_PROMPT,
-        "alt_text": f"Campaign visual background for {product_name}.",
+        "alt_text": alt_text,
     }
 
 
@@ -362,7 +475,11 @@ def generate_background_image(
                 prompt=prompt,
                 image_path=None,
                 error=IMAGE_GENERATION_DISABLED_ERROR,
-                notes=notes + ["Hosted image generation is disabled in the local-first default setup."],
+                notes=notes
+                + [
+                    "Hosted image generation is disabled in the local-first "
+                    "default setup."
+                ],
             )
 
         primary_result = _generate_background_with_provider(
@@ -392,8 +509,15 @@ def generate_background_image(
             space_id=provider_reference(resolved_provider, settings),
             prompt=prompt,
             image_path=None,
-            error=f"Image generation request failed: {_format_exception_details(exc, include_repr=True)}",
-            notes=notes + ["No fallback provider is configured in the simplified local-first setup."],
+            error=(
+                "Image generation request failed: "
+                f"{_format_exception_details(exc, include_repr=True)}"
+            ),
+            notes=notes
+            + [
+                "No fallback provider is configured in the simplified "
+                "local-first setup."
+            ],
         )
 
 

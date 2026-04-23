@@ -1,7 +1,4 @@
 import {
-  ChangeEvent,
-  DragEvent,
-  KeyboardEvent,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -10,11 +7,18 @@ import {
 
 import { SectionIntro } from "../../../components/ui/SectionIntro";
 import { useScrollIntoViewOnChange } from "../../../hooks/useScrollIntoViewOnChange";
-import { formatCurrency, formatPercent } from "../../../lib/formatters";
-import {
-  analyzeCampaignCsv,
-  type LocalAnalysisResult,
-} from "../lib/analyzeCampaignCsv";
+import { runAssistant } from "../../../services/api/onebot";
+import type {
+  AssistantResponse,
+  CampaignAnalysisResponse,
+  OptimizationResponse,
+} from "../../../types/api";
+import type { SharedCampaignCsv } from "../../marketing-assistant/components/MarketingAssistantTab";
+
+type CampaignAnalysisTabProps = {
+  campaignCsv: SharedCampaignCsv | null;
+  onOpenMarketingAssistant: () => void;
+};
 
 function UploadCloudIcon() {
   return (
@@ -48,26 +52,29 @@ function UploadCloudIcon() {
   );
 }
 
-export function CampaignAnalysisTab() {
-  const inputRef = useRef<HTMLInputElement | null>(null);
+export function CampaignAnalysisTab({
+  campaignCsv,
+  onOpenMarketingAssistant,
+}: CampaignAnalysisTabProps) {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const resultsRef = useRef<HTMLDivElement | null>(null);
   const previousShellRectRef = useRef<DOMRect | null>(null);
-  const [fileName, setFileName] = useState("");
-  const [csvText, setCsvText] = useState("");
-  const [result, setResult] = useState<LocalAnalysisResult | null>(null);
+  const [assistantResponse, setAssistantResponse] = useState<AssistantResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isDragActive, setIsDragActive] = useState(false);
   const [lastAnalyzedCsvText, setLastAnalyzedCsvText] = useState<string | null>(null);
   const [isActionVisible, setIsActionVisible] = useState(false);
 
+  const csvText = campaignCsv?.csvText ?? "";
+  const fileName = campaignCsv?.fileName ?? "";
+  const analysis = assistantResponse?.analysis ?? null;
+  const optimization = assistantResponse?.optimization ?? null;
   const hasUploadedCsv = csvText.length > 0;
-  const hasAnalyzedCurrentCsv = hasUploadedCsv && lastAnalyzedCsvText === csvText && result !== null;
+  const hasAnalyzedCurrentCsv = hasUploadedCsv && lastAnalyzedCsvText === csvText && analysis !== null;
   const canAnalyze = hasUploadedCsv && !isAnalyzing && !hasAnalyzedCurrentCsv;
-  const hasCompletedAnalysis = Boolean(result) || Boolean(error);
+  const hasCompletedAnalysis = Boolean(analysis) || Boolean(error);
 
-  useScrollIntoViewOnChange(resultsRef, result ?? error);
+  useScrollIntoViewOnChange(resultsRef, analysis ?? error);
 
   useLayoutEffect(() => {
     const shell = shellRef.current;
@@ -107,6 +114,12 @@ export function CampaignAnalysisTab() {
   }, [hasCompletedAnalysis]);
 
   useEffect(() => {
+    setAssistantResponse(null);
+    setError(null);
+    setLastAnalyzedCsvText(null);
+  }, [csvText]);
+
+  useEffect(() => {
     if (!hasUploadedCsv) {
       setIsActionVisible(false);
       return;
@@ -122,71 +135,6 @@ export function CampaignAnalysisTab() {
     };
   }, [csvText, hasUploadedCsv]);
 
-  async function loadFile(file: File) {
-    if (!file) {
-      return;
-    }
-
-    setError(null);
-    setFileName(file.name);
-    setIsDragActive(false);
-
-    try {
-      const nextCsvText = await file.text();
-      setCsvText(nextCsvText);
-      setResult(null);
-      setLastAnalyzedCsvText(null);
-    } catch (uploadError) {
-      setCsvText("");
-      setResult(null);
-      setLastAnalyzedCsvText(null);
-      setError(uploadError instanceof Error ? uploadError.message : "Unable to read the uploaded CSV.");
-    }
-  }
-
-  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    await loadFile(file);
-  }
-
-  function handleDragOver(event: DragEvent<HTMLDivElement>) {
-    event.preventDefault();
-    setIsDragActive(true);
-  }
-
-  function handleDragLeave(event: DragEvent<HTMLDivElement>) {
-    event.preventDefault();
-    setIsDragActive(false);
-  }
-
-  async function handleDrop(event: DragEvent<HTMLDivElement>) {
-    event.preventDefault();
-    const file = event.dataTransfer.files?.[0];
-    if (!file) {
-      setIsDragActive(false);
-      return;
-    }
-
-    await loadFile(file);
-  }
-
-  function openFilePicker() {
-    inputRef.current?.click();
-  }
-
-  function handleDropzoneKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key !== "Enter" && event.key !== " ") {
-      return;
-    }
-
-    event.preventDefault();
-    openFilePicker();
-  }
-
   async function handleAnalyze() {
     setError(null);
 
@@ -198,17 +146,79 @@ export function CampaignAnalysisTab() {
     setIsAnalyzing(true);
 
     try {
-      await new Promise((resolve) => window.setTimeout(resolve, 160));
-      setResult(analyzeCampaignCsv(csvText));
+      const nextResponse = await runAssistant({
+        message:
+          "Analyze the uploaded campaign CSV, calculate campaign KPIs, identify the best and weakest campaigns, and recommend optimization actions.",
+        campaign_csv_content: csvText,
+        campaign_csv_filename: fileName || "campaigns.csv",
+      });
+
+      if (!nextResponse.analysis) {
+        throw new Error("The assistant responded, but no campaign analysis was returned.");
+      }
+
+      setAssistantResponse(nextResponse);
       setLastAnalyzedCsvText(csvText);
     } catch (analysisError) {
-      setResult(null);
+      setAssistantResponse(null);
       setLastAnalyzedCsvText(null);
       setError(analysisError instanceof Error ? analysisError.message : "Unable to analyze the uploaded CSV.");
     } finally {
       setIsAnalyzing(false);
     }
   }
+
+  function findCampaignById(
+    campaignAnalysis: CampaignAnalysisResponse,
+    campaignId: string | null | undefined,
+  ): Record<string, string | number | null> | null {
+    if (!campaignId) {
+      return null;
+    }
+
+    return (
+      campaignAnalysis.campaign_breakdown.find(
+        (campaign) => String(campaign.campaign_id ?? "") === campaignId,
+      ) ?? null
+    );
+  }
+
+  function formatMetricValue(value: string | number | null | undefined, suffix = ""): string {
+    if (value === null || value === undefined || value === "") {
+      return "N/A";
+    }
+
+    return `${value}${suffix}`;
+  }
+
+  function formatCurrencyValue(value: string | number | null | undefined): string {
+    if (value === null || value === undefined || value === "") {
+      return "N/A";
+    }
+
+    const numeric = typeof value === "number" ? value : Number(value);
+    if (Number.isNaN(numeric)) {
+      return String(value);
+    }
+
+    return `$${numeric.toFixed(2)}`;
+  }
+
+  const bestCampaign = analysis ? findCampaignById(analysis, analysis.best_campaign) : null;
+  const weakestCampaign = analysis ? findCampaignById(analysis, analysis.weakest_campaign) : null;
+  const totalSpend = analysis
+    ? analysis.campaign_breakdown.reduce((sum, campaign) => sum + Number(campaign.spend ?? 0), 0)
+    : 0;
+  const totalRevenue = analysis
+    ? analysis.campaign_breakdown.reduce((sum, campaign) => sum + Number(campaign.revenue ?? 0), 0)
+    : 0;
+  const optimizationNotes = optimization
+    ? [
+        ...optimization.quick_wins.map((item) => item.recommendation),
+        ...optimization.strategic_changes.map((item) => item.recommendation),
+        ...optimization.ab_tests,
+      ]
+    : [];
 
   return (
     <div className={`tab-layout staged-tab ${hasCompletedAnalysis ? "is-active" : ""}`}>
@@ -223,33 +233,24 @@ export function CampaignAnalysisTab() {
 
           <div className="staged-tab-body staged-tab-body-wide">
             <div className="campaign-upload-stack">
-              <div
-                className={`upload-zone campaign-dropzone ${isDragActive ? "is-drag-active" : ""}`}
-                role="button"
-                tabIndex={0}
-                onClick={openFilePicker}
-                onKeyDown={handleDropzoneKeyDown}
-                onDragOver={handleDragOver}
-                onDragEnter={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                aria-label="Select campaign CSV"
-              >
-                <input
-                  ref={inputRef}
-                  className="visually-hidden-input"
-                  type="file"
-                  accept=".csv"
-                  onChange={handleFileChange}
-                  onClick={(event) => {
-                    event.currentTarget.value = "";
-                  }}
-                  aria-label="Campaign CSV file input"
-                />
+              <div className="upload-zone campaign-dropzone">
                 <UploadCloudIcon />
                 <span>Campaign CSV</span>
-                <strong>{fileName || "Drop your CSV here or click to browse."}</strong>
-                <small>Required columns: campaign_id, impressions, clicks, spend, conversions, revenue</small>
+                <strong>{fileName || "Upload your CSV once from Marketing Assistant."}</strong>
+                <small>
+                  {fileName
+                    ? "The shared dataset is ready for analysis in this workspace."
+                    : "Use the Marketing Assistant tab to upload a campaign CSV, then return here to analyze it."}
+                </small>
+                {!fileName ? (
+                  <button
+                    className="secondary-action"
+                    type="button"
+                    onClick={onOpenMarketingAssistant}
+                  >
+                    Open Marketing Assistant
+                  </button>
+                ) : null}
               </div>
 
               {hasUploadedCsv ? (
@@ -282,54 +283,54 @@ export function CampaignAnalysisTab() {
           </div>
         ) : null}
 
-        {result ? (
+        {analysis ? (
           <div ref={resultsRef} className="result-stack staged-tab-results staged-tab-results-wide">
             <div className="kpi-grid">
               <article className="kpi-card">
                 <span>CTR</span>
-                <strong>{formatPercent(result.overall.ctr_percent)}</strong>
+                <strong>{analysis.summary.ctr}</strong>
               </article>
               <article className="kpi-card">
                 <span>Conversion Rate</span>
-                <strong>{formatPercent(result.overall.conversion_rate_percent)}</strong>
+                <strong>{analysis.summary.conversion_rate}</strong>
               </article>
               <article className="kpi-card">
                 <span>CPA</span>
-                <strong>{formatCurrency(result.overall.cpa)}</strong>
+                <strong>{formatCurrencyValue(analysis.summary.cpa)}</strong>
               </article>
               <article className="kpi-card">
                 <span>ROAS</span>
-                <strong>{result.overall.roas.toFixed(2)}x</strong>
+                <strong>{analysis.summary.roas}x</strong>
               </article>
               <article className="kpi-card">
                 <span>ROI</span>
-                <strong>{formatPercent(result.overall.roi_percent)}</strong>
+                <strong>{analysis.summary.roi}</strong>
               </article>
             </div>
 
             <div className="spotlight-grid spotlight-grid-three">
               <article className="spotlight-card success">
                 <p className="eyebrow">Best Campaign</p>
-                <h3>{result.bestCampaign?.campaign_id ?? "N/A"}</h3>
+                <h3>{analysis.best_campaign ?? "N/A"}</h3>
                 <p>
-                  {result.bestCampaign?.platform ?? "Platform unknown"} with{" "}
-                  {result.bestCampaign ? `${result.bestCampaign.roas.toFixed(2)}x ROAS` : "no score yet"}
+                  {String(bestCampaign?.platform ?? "Platform unknown")} with{" "}
+                  {formatMetricValue(bestCampaign?.roas, "x ROAS")}
                 </p>
               </article>
 
               <article className="spotlight-card caution">
                 <p className="eyebrow">Watch List</p>
-                <h3>{result.weakestCampaign?.campaign_id ?? "N/A"}</h3>
+                <h3>{analysis.weakest_campaign ?? "N/A"}</h3>
                 <p>
-                  {result.weakestCampaign?.platform ?? "Platform unknown"} with{" "}
-                  {result.weakestCampaign ? `${result.weakestCampaign.roas.toFixed(2)}x ROAS` : "no score yet"}
+                  {String(weakestCampaign?.platform ?? "Platform unknown")} with{" "}
+                  {formatMetricValue(weakestCampaign?.roas, "x ROAS")}
                 </p>
               </article>
 
               <article className="spotlight-card neutral">
                 <p className="eyebrow">Budget Snapshot</p>
-                <h3>{formatCurrency(result.overall.total_spend)}</h3>
-                <p>{formatCurrency(result.overall.total_revenue)} revenue tracked in this upload.</p>
+                <h3>{formatCurrencyValue(totalSpend)}</h3>
+                <p>{formatCurrencyValue(totalRevenue)} revenue tracked in this upload.</p>
               </article>
             </div>
 
@@ -356,16 +357,16 @@ export function CampaignAnalysisTab() {
                     </tr>
                   </thead>
                   <tbody>
-                    {result.campaigns.map((campaign) => (
-                      <tr key={campaign.campaign_id}>
-                        <td>{campaign.campaign_id}</td>
-                        <td>{campaign.platform ?? "N/A"}</td>
-                        <td>{campaign.audience ?? "N/A"}</td>
-                        <td>{formatPercent(campaign.ctr_percent)}</td>
-                        <td>{formatPercent(campaign.conversion_rate_percent)}</td>
-                        <td>{formatCurrency(campaign.cpa)}</td>
-                        <td>{campaign.roas.toFixed(2)}x</td>
-                        <td>{formatPercent(campaign.roi_percent)}</td>
+                    {analysis.campaign_breakdown.map((campaign) => (
+                      <tr key={String(campaign.campaign_id ?? "unknown-campaign")}>
+                        <td>{String(campaign.campaign_id ?? "N/A")}</td>
+                        <td>{String(campaign.platform ?? "N/A")}</td>
+                        <td>{String(campaign.audience ?? "N/A")}</td>
+                        <td>{formatMetricValue(campaign.ctr_percent, "%")}</td>
+                        <td>{formatMetricValue(campaign.conversion_rate_percent, "%")}</td>
+                        <td>{formatCurrencyValue(campaign.cpa)}</td>
+                        <td>{formatMetricValue(campaign.roas, "x")}</td>
+                        <td>{formatMetricValue(campaign.roi_percent, "%")}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -381,7 +382,7 @@ export function CampaignAnalysisTab() {
                 </div>
               </div>
               <ul className="bullet-list">
-                {result.recommendations.map((recommendation) => (
+                {(optimizationNotes.length > 0 ? optimizationNotes : analysis.insights).map((recommendation) => (
                   <li key={recommendation}>{recommendation}</li>
                 ))}
               </ul>

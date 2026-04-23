@@ -72,6 +72,9 @@ class ImageGenerationAgent:
         request_image_generation: bool,
         headline: str | None = None,
         cta: str | None = None,
+        brand_context: str | None = None,
+        performance_context: list[str] | None = None,
+        optimization_context: list[str] | None = None,
         compose_publication_image_flag: bool = True,
         provider: str | None = None,
     ) -> ImageGenerationResponse:
@@ -81,6 +84,13 @@ class ImageGenerationAgent:
             product_name=product_name,
             audience=audience,
             platform=platform_name,
+            goal=goal,
+            style=style,
+            headline=headline,
+            cta=cta,
+            brand_context=brand_context,
+            performance_context=performance_context,
+            optimization_context=optimization_context,
         )
         notes: list[str] = []
         background_image_path = None

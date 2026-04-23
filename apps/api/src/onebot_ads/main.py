@@ -22,6 +22,16 @@ def create_app() -> FastAPI:
             settings.image_provider,
             settings.image_model_id,
         )
+        if settings.enable_rag:
+            logger.info("Auto-reindexing knowledge base on startup...")
+            try:
+                import asyncio
+                from onebot_ads.rag.knowledge_base import KnowledgeBaseService
+                kb = KnowledgeBaseService(settings)
+                result = await asyncio.to_thread(kb.reindex)
+                logger.info("Reindex complete: %d documents indexed in %s.", result.documents_indexed, result.collection_name)
+            except Exception as e:
+                logger.error("Auto-reindex failed: %s", e)
         yield
 
     app = FastAPI(

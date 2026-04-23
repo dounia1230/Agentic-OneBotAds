@@ -41,8 +41,22 @@ class CampaignDataAnalystAgent:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-    def run(self, csv_path: str | None = None) -> CampaignAnalysisResponse:
-        result = analyze_campaign_performance.invoke({"csv_path": csv_path} if csv_path else {})
+    def run(
+        self,
+        csv_path: str | None = None,
+        *,
+        csv_content: str | None = None,
+        csv_label: str | None = None,
+    ) -> CampaignAnalysisResponse:
+        payload: dict[str, str] = {}
+        if csv_path:
+            payload["csv_path"] = csv_path
+        if csv_content:
+            payload["csv_content"] = csv_content
+        if csv_label:
+            payload["source_label"] = csv_label
+
+        result = analyze_campaign_performance.invoke(payload)
         if result.get("error"):
             message = result.get("message") or (
                 "Missing required columns: " + ", ".join(result.get("missing_columns", []))

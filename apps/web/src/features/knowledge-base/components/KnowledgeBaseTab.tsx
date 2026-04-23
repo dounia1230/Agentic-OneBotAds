@@ -1,7 +1,8 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { SectionIntro } from "../../../components/ui/SectionIntro";
+import { useScrollIntoViewOnChange } from "../../../hooks/useScrollIntoViewOnChange";
 import { runAssistant } from "../../../services/api/onebot";
 import type { AssistantResponse } from "../../../types/api";
 
@@ -9,10 +10,13 @@ const defaultQuestion =
   "What guidance does the knowledge base give for tone and messaging?";
 
 export function KnowledgeBaseTab() {
+  const resultsRef = useRef<HTMLDivElement | null>(null);
   const [question, setQuestion] = useState(defaultQuestion);
   const [response, setResponse] = useState<AssistantResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useScrollIntoViewOnChange(resultsRef, response?.rag);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -58,7 +62,7 @@ export function KnowledgeBaseTab() {
       </form>
 
       {response?.rag ? (
-        <div className="result-stack">
+        <div ref={resultsRef} className="result-stack">
           <article className="detail-card">
             <p className="eyebrow">Answer</p>
             <p>{response.rag.answer}</p>

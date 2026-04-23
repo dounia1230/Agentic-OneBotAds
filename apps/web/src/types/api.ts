@@ -38,7 +38,9 @@ export type CampaignDraftResponse = {
   variants: AdVariant[];
   image_prompt?: ImagePrompt | null;
   used_context: ContextSnippet[];
+  compliance_issues: string[];
   warnings: string[];
+  status: string;
 };
 
 export type AssistantRequest = {

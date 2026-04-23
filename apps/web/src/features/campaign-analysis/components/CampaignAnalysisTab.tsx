@@ -8,6 +8,7 @@ import {
 } from "react";
 
 import { SectionIntro } from "../../../components/ui/SectionIntro";
+import { useScrollIntoViewOnChange } from "../../../hooks/useScrollIntoViewOnChange";
 import { formatCurrency, formatPercent } from "../../../lib/formatters";
 import {
   analyzeCampaignCsv,
@@ -48,6 +49,7 @@ function UploadCloudIcon() {
 
 export function CampaignAnalysisTab() {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const resultsRef = useRef<HTMLDivElement | null>(null);
   const [fileName, setFileName] = useState("");
   const [csvText, setCsvText] = useState("");
   const [result, setResult] = useState<LocalAnalysisResult | null>(null);
@@ -60,6 +62,8 @@ export function CampaignAnalysisTab() {
   const hasUploadedCsv = csvText.length > 0;
   const hasAnalyzedCurrentCsv = hasUploadedCsv && lastAnalyzedCsvText === csvText && result !== null;
   const canAnalyze = hasUploadedCsv && !isAnalyzing && !hasAnalyzedCurrentCsv;
+
+  useScrollIntoViewOnChange(resultsRef, result);
 
   useEffect(() => {
     if (!hasUploadedCsv) {
@@ -225,7 +229,7 @@ export function CampaignAnalysisTab() {
       </div>
 
       {result ? (
-        <div className="result-stack">
+        <div ref={resultsRef} className="result-stack">
           <div className="kpi-grid">
             <article className="kpi-card">
               <span>CTR</span>

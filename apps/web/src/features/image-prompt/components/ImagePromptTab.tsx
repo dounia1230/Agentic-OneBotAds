@@ -1,7 +1,8 @@
-import { ChangeEvent, FormEvent, useState } from "react";
+import { ChangeEvent, FormEvent, useRef, useState } from "react";
 
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { SectionIntro } from "../../../components/ui/SectionIntro";
+import { useScrollIntoViewOnChange } from "../../../hooks/useScrollIntoViewOnChange";
 import { canPreviewImage } from "../../../lib/media";
 import { PLATFORM_OPTIONS } from "../../../lib/platforms";
 import { runAssistant } from "../../../services/api/onebot";
@@ -34,11 +35,14 @@ function buildImagePromptRequestMessage(form: ImagePromptFormValues): string {
 }
 
 export function ImagePromptTab() {
+  const resultsRef = useRef<HTMLDivElement | null>(null);
   const [form, setForm] = useState<ImagePromptFormValues>(defaultImageForm);
   const [result, setResult] = useState<ImageGenerationResponse | null>(null);
   const [intent, setIntent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useScrollIntoViewOnChange(resultsRef, result);
 
   function handleFieldChange(event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const target = event.target;
@@ -138,7 +142,7 @@ export function ImagePromptTab() {
       </form>
 
       {result ? (
-        <div className="result-stack">
+        <div ref={resultsRef} className="result-stack">
           <div className="structured-grid">
             <article className="detail-card span-two">
               <p className="eyebrow">Image Prompt</p>

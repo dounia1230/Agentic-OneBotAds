@@ -1,7 +1,7 @@
 import shutil
 import time
-from inspect import signature
 from functools import lru_cache
+from inspect import signature
 from pathlib import Path
 
 from langchain.tools import tool
@@ -13,18 +13,9 @@ DEFAULT_NEGATIVE_PROMPT = (
     "blurry, low quality, fake brand marks"
 )
 QWEN_IMAGE_PROVIDER = "qwen_image"
-FLUX_IMAGE_PROVIDER = "flux_schnell"
 HF_SPACE_BACKEND = "huggingface_space"
 IMAGE_GENERATION_DISABLED_ERROR = "Image generation is disabled in configuration."
-ASPECT_RATIO_DIMENSIONS = {
-    "1:1": (1024, 1024),
-    "16:9": (1344, 768),
-    "9:16": (768, 1344),
-    "4:3": (1152, 864),
-    "3:4": (864, 1152),
-    "3:2": (1216, 832),
-    "2:3": (832, 1216),
-}
+SUPPORTED_IMAGE_PROVIDERS = {QWEN_IMAGE_PROVIDER}
 
 
 def build_publication_background_prompt(
@@ -53,6 +44,29 @@ def _background_output_path(output_dir: Path, source_path: Path | None = None) -
     return output_dir / f"background_{int(time.time())}{extension}"
 
 
+def normalize_image_provider(
+    provider: str | None,
+    default_provider: str = QWEN_IMAGE_PROVIDER,
+) -> tuple[str, str | None]:
+    normalized_default = (default_provider or QWEN_IMAGE_PROVIDER).strip().lower()
+    if normalized_default not in SUPPORTED_IMAGE_PROVIDERS:
+        normalized_default = QWEN_IMAGE_PROVIDER
+    resolved_provider = (provider or default_provider or QWEN_IMAGE_PROVIDER).strip().lower()
+    if resolved_provider in SUPPORTED_IMAGE_PROVIDERS:
+        return resolved_provider, None
+    return normalized_default, f"Image provider normalized to {normalized_default}."
+
+
+def provider_backend(provider: str) -> str:
+    return HF_SPACE_BACKEND
+
+
+def provider_reference(provider: str, settings) -> str | None:
+    if provider == QWEN_IMAGE_PROVIDER:
+        return settings.qwen_image_space_id
+    return None
+
+
 def _load_client_class():
     try:
         from gradio_client import Client
@@ -75,7 +89,7 @@ def _build_client_kwargs(client_class, hf_token: str | None) -> dict:
     return kwargs
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=2)
 def _get_hf_space_client(space_id: str, hf_token: str | None):
     client_class = _load_client_class()
     return client_class(space_id, **_build_client_kwargs(client_class, hf_token))
@@ -83,11 +97,6 @@ def _get_hf_space_client(space_id: str, hf_token: str | None):
 
 @lru_cache(maxsize=2)
 def _get_qwen_client(space_id: str, hf_token: str | None):
-    return _get_hf_space_client(space_id, hf_token)
-
-
-@lru_cache(maxsize=2)
-def _get_flux_client(space_id: str, hf_token: str | None):
     return _get_hf_space_client(space_id, hf_token)
 
 
@@ -182,8 +191,8 @@ def _format_exception_details(
         provider_hint = f" for {provider}" if provider else ""
         details = (
             f"{details} (the upstream Hugging Face Space{provider_hint} failed internally "
-            "and only returned the exception class name; retry later or disable this "
-            "fallback if it keeps failing)"
+            "and only returned the exception class name; retry later or disable image "
+            "generation if it keeps failing)"
         )
 
     if include_repr:
@@ -204,28 +213,26 @@ def _build_generation_result(
     *,
     status: str,
     provider: str,
-    space_id: str,
+    backend: str,
+    space_id: str | None,
     prompt: str,
     image_path: str | None,
     error: str | None,
     notes: list[str] | None = None,
-    fallback_used: bool = False,
-    fallback_attempted: bool = False,
-    fallback_succeeded: bool = False,
 ) -> dict:
     return {
         "status": status,
         "provider": provider,
-        "backend": HF_SPACE_BACKEND,
+        "backend": backend,
         "space_id": space_id,
         "image_path": image_path,
         "background_image_path": image_path,
         "prompt": prompt,
         "error": error,
         "notes": notes or [],
-        "fallback_used": fallback_used,
-        "fallback_attempted": fallback_attempted,
-        "fallback_succeeded": fallback_succeeded,
+        "fallback_used": False,
+        "fallback_attempted": False,
+        "fallback_succeeded": False,
         "primary_provider": provider,
         "fallback_provider": None,
     }
@@ -260,6 +267,7 @@ def _run_hf_space_generation(
         return _build_generation_result(
             status="generated",
             provider=provider,
+            backend=HF_SPACE_BACKEND,
             space_id=space_id,
             prompt=prompt,
             image_path=str(saved_path),
@@ -269,21 +277,12 @@ def _run_hf_space_generation(
         return _build_generation_result(
             status="generation_failed",
             provider=provider,
+            backend=HF_SPACE_BACKEND,
             space_id=space_id,
             prompt=prompt,
             image_path=None,
             error=_format_exception_details(exc, provider=provider, include_repr=True),
         )
-
-
-def _flux_dimensions_for(aspect_ratio: str) -> tuple[int, int]:
-    return ASPECT_RATIO_DIMENSIONS.get(aspect_ratio, ASPECT_RATIO_DIMENSIONS["1:1"])
-
-
-def _should_attempt_fallback(error: str | None) -> bool:
-    if not error:
-        return True
-    return IMAGE_GENERATION_DISABLED_ERROR.lower() not in error.lower()
 
 
 def generate_qwen_image_background(
@@ -315,31 +314,21 @@ def generate_qwen_image_background(
     )
 
 
-def generate_flux_schnell_background(
+def _generate_background_with_provider(
+    *,
+    provider: str,
     prompt: str,
-    aspect_ratio: str = "1:1",
-    output_dir: str = "outputs/images",
-    seed: int = 0,
-    randomize_seed: bool = True,
-    num_inference_steps: int = 4,
+    negative_prompt: str,
+    aspect_ratio: str,
+    output_dir: str,
 ) -> dict:
-    settings = get_settings()
-    width, height = _flux_dimensions_for(aspect_ratio)
-    return _run_hf_space_generation(
-        prompt=prompt,
-        output_dir=output_dir,
-        provider=FLUX_IMAGE_PROVIDER,
-        space_id=settings.flux_image_space_id,
-        client_getter=_get_flux_client,
-        predict_args=(
-            prompt,
-            int(seed),
-            randomize_seed,
-            width,
-            height,
-            num_inference_steps,
-        ),
-    )
+    if provider == QWEN_IMAGE_PROVIDER:
+        return generate_qwen_image_background(
+            prompt=prompt,
+            aspect_ratio=aspect_ratio,
+            output_dir=output_dir,
+        )
+    raise RuntimeError(f"Unsupported image provider: {provider}")
 
 
 @tool
@@ -350,108 +339,62 @@ def generate_background_image(
     aspect_ratio: str = "1:1",
 ) -> dict:
     """
-    Generate a background image for publication visuals with the Qwen Image Space.
+    Generate a background image for publication visuals with the configured image backend.
     Returns prompt-only, generated, or generation_failed status.
     """
     settings = get_settings()
     notes: list[str] = []
-    requested_provider = (provider or settings.image_provider or QWEN_IMAGE_PROVIDER).lower()
-    resolved_provider = QWEN_IMAGE_PROVIDER
-    fallback_provider = settings.image_fallback_provider
-    if requested_provider != QWEN_IMAGE_PROVIDER:
-        notes.append("Image provider normalized to qwen_image.")
+    requested_provider = provider or settings.image_provider or QWEN_IMAGE_PROVIDER
+    resolved_provider, normalization_note = normalize_image_provider(
+        requested_provider,
+        settings.image_provider or QWEN_IMAGE_PROVIDER,
+    )
+    if normalization_note:
+        notes.append(normalization_note)
 
     try:
         if not settings.enable_image_generation:
-            result = _build_generation_result(
+            return _build_generation_result(
                 status="generation_failed",
                 provider=resolved_provider,
-                space_id=settings.qwen_image_space_id,
+                backend=provider_backend(resolved_provider),
+                space_id=provider_reference(resolved_provider, settings),
                 prompt=prompt,
                 image_path=None,
                 error=IMAGE_GENERATION_DISABLED_ERROR,
-                notes=notes + ["Fallback was not attempted because image generation is disabled."],
+                notes=notes + ["Hosted image generation is disabled in the local-first default setup."],
             )
-            result["fallback_provider"] = fallback_provider
-            return result
 
-        primary_result = generate_qwen_image_background(
+        primary_result = _generate_background_with_provider(
+            provider=resolved_provider,
             prompt=prompt,
+            negative_prompt=negative_prompt,
             aspect_ratio=aspect_ratio,
             output_dir=str(settings.output_image_dir),
         )
         primary_result["notes"] = notes + primary_result.get("notes", [])
-        primary_result["primary_provider"] = QWEN_IMAGE_PROVIDER
-        primary_result["fallback_provider"] = fallback_provider
-        primary_result["fallback_used"] = False
-        primary_result["fallback_attempted"] = False
-        primary_result["fallback_succeeded"] = False
+        primary_result["primary_provider"] = resolved_provider
+        primary_result["fallback_provider"] = None
         if primary_result["status"] != "generation_failed":
             primary_result["notes"].append(
-                f"Fallback was not attempted because {QWEN_IMAGE_PROVIDER} succeeded."
+                f"No fallback provider is configured; {resolved_provider} succeeded."
             )
-            return primary_result
-
-        fallback_enabled = (
-            settings.image_fallback_enabled and fallback_provider == FLUX_IMAGE_PROVIDER
-        )
-        fallback_eligible = _should_attempt_fallback(primary_result.get("error"))
-        if not fallback_enabled:
+        else:
             primary_result["notes"].append(
-                f"Fallback was not attempted because provider {fallback_provider} is disabled."
+                "No fallback provider is configured in the simplified local-first setup."
             )
-            return primary_result
-        if not fallback_eligible:
-            primary_result["notes"].append(
-                "Fallback was not attempted because the primary error is not eligible."
-            )
-            return primary_result
-
-        fallback_notes = primary_result["notes"] + [
-            f"Primary provider {QWEN_IMAGE_PROVIDER} failed: {primary_result.get('error')}",
-            f"Attempting fallback provider {FLUX_IMAGE_PROVIDER}.",
-        ]
-        fallback_result = generate_flux_schnell_background(
-            prompt=prompt,
-            aspect_ratio=aspect_ratio,
-            output_dir=str(settings.output_image_dir),
-        )
-        fallback_result["notes"] = fallback_notes + fallback_result.get("notes", [])
-        fallback_result["fallback_used"] = True
-        fallback_result["fallback_attempted"] = True
-        fallback_result["fallback_succeeded"] = False
-        fallback_result["primary_provider"] = QWEN_IMAGE_PROVIDER
-        fallback_result["fallback_provider"] = FLUX_IMAGE_PROVIDER
-        if fallback_result["status"] != "generation_failed":
-            fallback_result["error"] = None
-            fallback_result["fallback_used"] = True
-            fallback_result["fallback_succeeded"] = True
-            fallback_result["notes"].append(
-                f"Fallback provider {FLUX_IMAGE_PROVIDER} succeeded."
-            )
-            return fallback_result
-
-        fallback_error = fallback_result.get("error") or "Unknown fallback error."
-        fallback_result["notes"].append(
-            f"Fallback provider {FLUX_IMAGE_PROVIDER} failed: {fallback_error}"
-        )
-        fallback_result["error"] = (
-            f"Qwen failed: {primary_result.get('error')}; "
-            f"FLUX fallback failed: {fallback_error}"
-        )
-        return fallback_result
+        return primary_result
     except Exception as exc:
-        result = _build_generation_result(
+        return _build_generation_result(
             status="generation_failed",
             provider=resolved_provider,
-            space_id=settings.qwen_image_space_id,
+            backend=provider_backend(resolved_provider),
+            space_id=provider_reference(resolved_provider, settings),
             prompt=prompt,
             image_path=None,
             error=f"Image generation request failed: {_format_exception_details(exc, include_repr=True)}",
-            notes=notes + ["Fallback outcome is unknown because generation failed before a provider response was returned."],
+            notes=notes + ["No fallback provider is configured in the simplified local-first setup."],
         )
-        result["fallback_provider"] = fallback_provider
-        return result
 
 
 @tool

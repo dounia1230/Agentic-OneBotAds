@@ -171,6 +171,7 @@ def test_runtime_summary_normalizes_paths_and_exposes_image_runtime(
         enable_live_llm=False,
         enable_rag=True,
         enable_image_generation=True,
+        image_provider="qwen_image",
         knowledge_base_path=Path("data/knowledge_base"),
         outputs_directory=tmp_path,
     )
@@ -208,11 +209,11 @@ def test_campaign_draft_route_returns_200_when_image_generation_fails(
                 "background_image_path": None,
                 "image_path": None,
                 "prompt": payload["prompt"],
-                "error": "Qwen failed: rate limit; FLUX fallback failed: provider unavailable",
-                "notes": ["Attempting fallback provider flux_schnell."],
-                "fallback_used": True,
+                "error": "qwen_image failed: rate limit",
+                "notes": ["No fallback provider is configured in the simplified local-first setup."],
+                "fallback_used": False,
                 "primary_provider": "qwen_image",
-                "fallback_provider": "flux_schnell",
+                "fallback_provider": None,
             }
 
     monkeypatch.setattr(
@@ -241,5 +242,5 @@ def test_campaign_draft_route_returns_200_when_image_generation_fails(
     assert response.status_code == 200
     payload = response.json()
     assert payload["image_prompt"]["status"] == "generation_failed"
-    assert payload["image_prompt"]["fallback_used"] is True
-    assert "FLUX fallback failed" in payload["image_prompt"]["error"]
+    assert payload["image_prompt"]["fallback_used"] is False
+    assert "qwen_image failed: rate limit" in payload["image_prompt"]["error"]

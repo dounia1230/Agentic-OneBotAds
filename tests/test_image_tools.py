@@ -4,7 +4,6 @@ from pathlib import Path
 from gradio_client.exceptions import AppError
 
 from onebot_ads.tools.image_tools import (
-    FLUX_IMAGE_PROVIDER,
     QWEN_IMAGE_PROVIDER,
     _format_exception_details,
     generate_ad_image,
@@ -23,11 +22,8 @@ def test_generate_ad_image_uses_qwen_huggingface_space(
 
     class StubSettings:
         enable_image_generation = True
-        image_provider = "qwen_image"
+        image_provider = QWEN_IMAGE_PROVIDER
         qwen_image_space_id = "Qwen/Qwen-Image-2512"
-        flux_image_space_id = "black-forest-labs/FLUX.1-schnell"
-        image_fallback_provider = "flux_schnell"
-        image_fallback_enabled = True
         hf_token = None
         output_image_dir = tmp_path
 
@@ -55,17 +51,11 @@ def test_generate_ad_image_uses_qwen_huggingface_space(
     )
 
     assert result["status"] == "generated"
-    assert result["provider"] == "qwen_image"
+    assert result["provider"] == QWEN_IMAGE_PROVIDER
     assert result["backend"] == "huggingface_space"
     assert result["space_id"] == "Qwen/Qwen-Image-2512"
-    assert result["image_path"] is not None
     assert Path(result["image_path"]).exists()
-    assert captured["args"][:4] == (
-        "Create a campaign visual",
-        0,
-        True,
-        "16:9",
-    )
+    assert captured["args"][:4] == ("Create a campaign visual", 0, True, "16:9")
     assert captured["kwargs"]["api_name"] == "/infer"
 
 
@@ -78,11 +68,8 @@ def test_generate_background_image_normalizes_unsupported_provider(
 
     class StubSettings:
         enable_image_generation = True
-        image_provider = "qwen_image"
+        image_provider = QWEN_IMAGE_PROVIDER
         qwen_image_space_id = "Qwen/Qwen-Image-2512"
-        flux_image_space_id = "black-forest-labs/FLUX.1-schnell"
-        image_fallback_provider = "flux_schnell"
-        image_fallback_enabled = True
         hf_token = None
         output_image_dir = tmp_path
 
@@ -108,7 +95,7 @@ def test_generate_background_image_normalizes_unsupported_provider(
     )
 
     assert result["status"] == "generated"
-    assert result["provider"] == "qwen_image"
+    assert result["provider"] == QWEN_IMAGE_PROVIDER
     assert result["notes"][0] == "Image provider normalized to qwen_image."
 
 
@@ -118,11 +105,8 @@ def test_generate_background_image_returns_failure_when_qwen_errors(
 ) -> None:
     class StubSettings:
         enable_image_generation = True
-        image_provider = "qwen_image"
+        image_provider = QWEN_IMAGE_PROVIDER
         qwen_image_space_id = "Qwen/Qwen-Image-2512"
-        flux_image_space_id = "black-forest-labs/FLUX.1-schnell"
-        image_fallback_provider = "flux_schnell"
-        image_fallback_enabled = False
         hf_token = None
         output_image_dir = tmp_path
 
@@ -142,146 +126,51 @@ def test_generate_background_image_returns_failure_when_qwen_errors(
     result = generate_background_image.invoke(
         {
             "prompt": "clean professional background",
-            "provider": "qwen_image",
+            "provider": QWEN_IMAGE_PROVIDER,
             "aspect_ratio": "1:1",
         }
     )
 
     assert result["status"] == "generation_failed"
-    assert result["provider"] == "qwen_image"
-    assert result["image_path"] is None
+    assert result["provider"] == QWEN_IMAGE_PROVIDER
+    assert result["fallback_used"] is False
+    assert result["fallback_provider"] is None
     assert "Space unavailable" in result["error"]
 
 
-def test_generate_background_image_uses_flux_fallback_when_qwen_fails(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
+def test_generate_background_image_returns_failure_when_disabled(tmp_path: Path, monkeypatch) -> None:
     class StubSettings:
-        enable_image_generation = True
-        image_provider = "qwen_image"
+        enable_image_generation = False
+        image_provider = QWEN_IMAGE_PROVIDER
         qwen_image_space_id = "Qwen/Qwen-Image-2512"
-        flux_image_space_id = "black-forest-labs/FLUX.1-schnell"
-        image_fallback_provider = "flux_schnell"
-        image_fallback_enabled = True
-        hf_token = None
-        output_image_dir = tmp_path
-
-    fallback_path = tmp_path / "flux.png"
-    fallback_path.write_bytes(b"flux")
-
-    monkeypatch.setattr("onebot_ads.tools.image_tools.get_settings", lambda: StubSettings())
-    monkeypatch.setattr(
-        "onebot_ads.tools.image_tools.generate_qwen_image_background",
-        lambda **kwargs: {
-            "status": "generation_failed",
-            "provider": QWEN_IMAGE_PROVIDER,
-            "backend": "huggingface_space",
-            "space_id": "Qwen/Qwen-Image-2512",
-            "background_image_path": None,
-            "image_path": None,
-            "prompt": kwargs["prompt"],
-            "error": "GPU quota exceeded",
-            "notes": [],
-        },
-    )
-    monkeypatch.setattr(
-        "onebot_ads.tools.image_tools.generate_flux_schnell_background",
-        lambda **kwargs: {
-            "status": "generated",
-            "provider": FLUX_IMAGE_PROVIDER,
-            "backend": "huggingface_space",
-            "space_id": "black-forest-labs/FLUX.1-schnell",
-            "background_image_path": str(fallback_path),
-            "image_path": str(fallback_path),
-            "prompt": kwargs["prompt"],
-            "error": None,
-            "notes": [],
-        },
-    )
-
-    result = generate_background_image.invoke(
-        {
-            "prompt": "clean professional background",
-            "provider": "qwen_image",
-            "aspect_ratio": "16:9",
-        }
-    )
-
-    assert result["status"] == "generated"
-    assert result["provider"] == FLUX_IMAGE_PROVIDER
-    assert result["fallback_used"] is True
-    assert result["primary_provider"] == QWEN_IMAGE_PROVIDER
-    assert result["fallback_provider"] == FLUX_IMAGE_PROVIDER
-    assert "Attempting fallback provider flux_schnell." in result["notes"]
-
-
-def test_generate_background_image_returns_combined_failure_when_fallback_fails(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    class StubSettings:
-        enable_image_generation = True
-        image_provider = "qwen_image"
-        qwen_image_space_id = "Qwen/Qwen-Image-2512"
-        flux_image_space_id = "black-forest-labs/FLUX.1-schnell"
-        image_fallback_provider = "flux_schnell"
-        image_fallback_enabled = True
         hf_token = None
         output_image_dir = tmp_path
 
     monkeypatch.setattr("onebot_ads.tools.image_tools.get_settings", lambda: StubSettings())
-    monkeypatch.setattr(
-        "onebot_ads.tools.image_tools.generate_qwen_image_background",
-        lambda **kwargs: {
-            "status": "generation_failed",
-            "provider": QWEN_IMAGE_PROVIDER,
-            "backend": "huggingface_space",
-            "space_id": "Qwen/Qwen-Image-2512",
-            "background_image_path": None,
-            "image_path": None,
-            "prompt": kwargs["prompt"],
-            "error": "rate limit",
-            "notes": [],
-        },
-    )
-    monkeypatch.setattr(
-        "onebot_ads.tools.image_tools.generate_flux_schnell_background",
-        lambda **kwargs: {
-            "status": "generation_failed",
-            "provider": FLUX_IMAGE_PROVIDER,
-            "backend": "huggingface_space",
-            "space_id": "black-forest-labs/FLUX.1-schnell",
-            "background_image_path": None,
-            "image_path": None,
-            "prompt": kwargs["prompt"],
-            "error": "provider unavailable",
-            "notes": [],
-        },
-    )
 
     result = generate_background_image.invoke(
         {
             "prompt": "clean professional background",
-            "provider": "qwen_image",
-            "aspect_ratio": "16:9",
+            "provider": QWEN_IMAGE_PROVIDER,
+            "aspect_ratio": "1:1",
         }
     )
 
     assert result["status"] == "generation_failed"
-    assert result["fallback_used"] is True
-    assert "Qwen failed: rate limit; FLUX fallback failed: provider unavailable" in result["error"]
+    assert result["fallback_used"] is False
+    assert result["fallback_provider"] is None
+    assert "disabled" in result["error"].lower()
 
 
 def test_format_exception_details_explains_opaque_upstream_app_errors() -> None:
     details = _format_exception_details(
         AppError("RuntimeError"),
-        provider=FLUX_IMAGE_PROVIDER,
+        provider=QWEN_IMAGE_PROVIDER,
         include_repr=True,
     )
 
     assert "AppError: RuntimeError" in details
-    assert "upstream Hugging Face Space for flux_schnell failed internally" in details
+    assert "upstream Hugging Face Space for qwen_image failed internally" in details
 
 
 def test_get_qwen_client_uses_supported_token_parameter(monkeypatch) -> None:
@@ -319,9 +208,6 @@ def test_generate_qwen_image_background_uses_integer_seed(monkeypatch, tmp_path:
 
     class StubSettings:
         qwen_image_space_id = "Qwen/Qwen-Image-2512"
-        flux_image_space_id = "black-forest-labs/FLUX.1-schnell"
-        image_fallback_provider = "flux_schnell"
-        image_fallback_enabled = True
         hf_token = None
 
     class FakeClient:

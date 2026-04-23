@@ -8,7 +8,7 @@ Agentic OneBotAds is a local-first multi-agent advertising assistant. It retriev
 - LangChain for prompt orchestration and tool wrappers
 - LlamaIndex plus ChromaDB for persistent RAG
 - Ollama with `qwen3:8b` and `nomic-embed-text:latest`
-- Qwen Image via the Hugging Face Space `Qwen/Qwen-Image-2512`
+- Ollama for local text generation, with optional hosted Qwen Image support when image generation is enabled
 
 ## Repo Shape
 
@@ -127,11 +127,11 @@ Frontend runs on `http://localhost:5173`. Backend runs on `http://127.0.0.1:8000
 
 ### Image Provider Options
 
-- `IMAGE_PROVIDER=qwen_image` remains the primary image backend.
-- The app calls the Hugging Face Space `Qwen/Qwen-Image-2512` first and can fall back to `black-forest-labs/FLUX.1-schnell`.
-- Configure fallback with `FLUX_IMAGE_SPACE_ID`, `IMAGE_FALLBACK_PROVIDER=flux_schnell`, and `IMAGE_FALLBACK_ENABLED=true`.
-- `generate_image_prompt=true` only returns prompt metadata. Cloud generation only runs when `generate_image=true`.
-- Set `HF_TOKEN` in `.env` only if the Space needs authenticated access or you hit rate limits.
+- The checked-in local-first default keeps `ENABLE_IMAGE_GENERATION=false` so the app runs cleanly on your PC without any hosted image dependency.
+- When you explicitly want hosted image generation, the only supported provider is `qwen_image`.
+- To enable it, set `ENABLE_IMAGE_GENERATION=true`, `IMAGE_PROVIDER=qwen_image`, and keep `QWEN_IMAGE_SPACE_ID=Qwen/Qwen-Image-2512`.
+- `generate_image_prompt=true` only returns prompt metadata. Actual image generation only runs when `generate_image=true`.
+- Leave `HF_TOKEN` empty unless the Space needs authenticated access or you hit rate limits.
 - Publication visuals are composed in code only after a background image is generated.
 - Generated images are saved under `outputs/images` and served by FastAPI at `/outputs/images/...`.
 

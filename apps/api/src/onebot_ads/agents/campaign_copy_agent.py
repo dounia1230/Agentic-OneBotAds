@@ -19,6 +19,9 @@ from onebot_ads.tools.image_composer import compose_publication_image
 from onebot_ads.tools.image_tools import (
     build_publication_background_prompt,
     generate_background_image,
+    normalize_image_provider,
+    provider_backend,
+    provider_reference,
 )
 from onebot_ads.tools.path_tools import to_outputs_url
 
@@ -289,16 +292,18 @@ class CampaignCopyAgent:
         brief: CampaignBrief,
         variants: list[AdVariant],
     ) -> ImagePrompt:
-        requested_provider = (brief.image_provider or self.settings.image_provider).lower()
-        provider = "qwen_image"
+        provider, normalization_note = normalize_image_provider(
+            brief.image_provider or self.settings.image_provider,
+            self.settings.image_provider,
+        )
         image_spec = build_publication_background_prompt(
             product_name=brief.product_name,
             audience=brief.audience,
             platform="/".join(brief.channels) if brief.channels else "linkedin",
         )
         notes: list[str] = []
-        if requested_provider != provider:
-            notes.append("Image provider normalized to qwen_image.")
+        if normalization_note:
+            notes.append(normalization_note)
         background_path = None
         publication_path = None
         status = "prompt_ready"
@@ -307,9 +312,9 @@ class CampaignCopyAgent:
         fallback_attempted = False
         fallback_succeeded = False
         primary_provider = provider
-        fallback_provider = self.settings.image_fallback_provider
-        backend = "huggingface_space"
-        space_id = self.settings.qwen_image_space_id
+        fallback_provider = None
+        backend = provider_backend(provider)
+        space_id = provider_reference(provider, self.settings)
 
         if brief.generate_image:
             try:

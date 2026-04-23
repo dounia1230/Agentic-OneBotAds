@@ -2,6 +2,9 @@
 
 ## Runtime Summary
 
+`image_provider` is `qwen_image` when hosted image generation is enabled. `image_model`
+reflects the configured Hugging Face Space id.
+
 ```json
 {
   "app_name": "Agentic OneBotAds",

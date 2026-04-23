@@ -5,6 +5,9 @@ from onebot_ads.tools.image_composer import compose_publication_image
 from onebot_ads.tools.image_tools import (
     build_publication_background_prompt,
     generate_background_image,
+    normalize_image_provider,
+    provider_backend,
+    provider_reference,
 )
 from onebot_ads.tools.path_tools import to_outputs_url
 
@@ -83,19 +86,21 @@ class ImageGenerationAgent:
         background_image_path = None
         publication_image_path = None
         image_path = None
-        requested_provider = (provider or self.settings.image_provider).lower()
-        resolved_provider = "qwen_image"
-        if requested_provider != resolved_provider:
-            notes.append("Image provider normalized to qwen_image.")
-        backend = "huggingface_space"
-        space_id = self.settings.qwen_image_space_id
+        resolved_provider, normalization_note = normalize_image_provider(
+            provider or self.settings.image_provider,
+            self.settings.image_provider,
+        )
+        if normalization_note:
+            notes.append(normalization_note)
+        backend = provider_backend(resolved_provider)
+        space_id = provider_reference(resolved_provider, self.settings)
         status = "prompt_ready"
         error = None
         fallback_used = False
         fallback_attempted = False
         fallback_succeeded = False
         primary_provider = resolved_provider
-        fallback_provider = self.settings.image_fallback_provider
+        fallback_provider = None
 
         if request_image_generation and self.settings.enable_image_generation:
             try:
@@ -164,6 +169,11 @@ class ImageGenerationAgent:
             status = "generation_failed"
             error = "Image generation is disabled in configuration."
             notes.append("Fallback was not attempted because image generation is disabled.")
+
+        if request_image_generation and not image_path:
+            notes.append(
+                "No image file was created; continue with the prompt as a text-only fallback."
+            )
 
         return ImageGenerationResponse(
             image_prompt=image_spec["prompt"],

@@ -60,18 +60,6 @@ class Settings(BaseSettings):
         default="Qwen/Qwen-Image-2512",
         validation_alias="QWEN_IMAGE_SPACE_ID",
     )
-    flux_image_space_id: str = Field(
-        default="black-forest-labs/FLUX.1-schnell",
-        validation_alias="FLUX_IMAGE_SPACE_ID",
-    )
-    image_fallback_provider: str = Field(
-        default="flux_schnell",
-        validation_alias="IMAGE_FALLBACK_PROVIDER",
-    )
-    image_fallback_enabled: bool = Field(
-        default=True,
-        validation_alias="IMAGE_FALLBACK_ENABLED",
-    )
     hf_token: str | None = Field(default=None, validation_alias="HF_TOKEN")
     outputs_directory: Path = PROJECT_ROOT / "outputs"
     output_image_dir: Path = Field(
@@ -85,8 +73,7 @@ class Settings(BaseSettings):
     output_post_dir: Path = PROJECT_ROOT / "outputs" / "posts"
 
     def model_post_init(self, __context: object) -> None:
-        self.image_provider = "qwen_image"
-        self.image_fallback_provider = "flux_schnell"
+        self.image_provider = str(self.image_provider).lower()
         self.chroma_path.mkdir(parents=True, exist_ok=True)
         self.knowledge_base_path.mkdir(parents=True, exist_ok=True)
         self.outputs_directory.mkdir(parents=True, exist_ok=True)

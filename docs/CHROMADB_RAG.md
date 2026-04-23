@@ -38,6 +38,51 @@ python app.py --reload
 2. Rebuild the index with `python rag/build_index.py`.
 3. Ask the CLI or API a grounded question to verify retrieval.
 
+## Postman Quick Test
+
+Use Postman after the FastAPI app is running on `http://127.0.0.1:8000`.
+
+### Step 1: Reindex The Knowledge Base
+
+- Method: `POST`
+- URL: `http://127.0.0.1:8000/api/v1/rag/reindex`
+- Body: none
+
+Expected result:
+- a JSON response confirming the index was rebuilt
+
+### Step 2: Query Through The Assistant API
+
+- Method: `POST`
+- URL: `http://127.0.0.1:8000/api/v1/assistant/run`
+- Header: `Content-Type: application/json`
+- Body:
+
+```json
+{
+  "message": "What are the main audience personas and tone rules for Agentic OneBotAds?",
+  "run_all_agents": false,
+  "save_output": false,
+  "export_report": false
+}
+```
+
+This message should route to the RAG path because it asks about personas and tone.
+
+Useful test prompts:
+- `What are the main audience personas for Agentic OneBotAds?`
+- `What tone and wording should the brand avoid?`
+- `Summarize the product catalog and safe claims.`
+- `What message angles are best for agencies versus SME owners?`
+
+Check these response fields:
+- `intent`
+- `plan.agents_to_call`
+- `rag.answer`
+- `rag.relevant_context`
+- `rag.source_documents`
+- `rag.confidence`
+
 ## Reset The Vector Store
 
 Delete the files inside `vector_store/chroma/`, then rebuild:

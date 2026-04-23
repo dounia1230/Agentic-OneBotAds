@@ -33,10 +33,12 @@ class KnowledgeBaseService:
             if index is None:
                 return []
 
-            query_engine = index.as_query_engine(similarity_top_k=top_k)
-            response = query_engine.query(query)
+            # Use the retriever directly so snippet lookup does not depend on
+            # an LLM-backed response synthesizer.
+            retriever = index.as_retriever(similarity_top_k=top_k)
+            source_nodes = retriever.retrieve(query)
             snippets: list[ContextSnippet] = []
-            for source in getattr(response, "source_nodes", []):
+            for source in source_nodes:
                 node = getattr(source, "node", None)
                 metadata = getattr(node, "metadata", {}) if node else {}
                 text = getattr(node, "text", "") if node else ""

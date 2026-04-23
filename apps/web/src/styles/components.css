@@ -665,6 +665,77 @@ textarea {
   border: 0;
 }
 
+.staged-tab {
+  width: 100%;
+}
+
+.staged-tab-stage {
+  width: 100%;
+  max-width: 1120px;
+  min-height: calc(100svh - 180px);
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+}
+
+.staged-tab.is-active .staged-tab-stage {
+  justify-content: flex-start;
+}
+
+.staged-tab-shell {
+  width: 100%;
+  display: grid;
+  gap: 26px;
+  justify-items: center;
+  will-change: transform;
+}
+
+.staged-tab-header,
+.staged-tab-body {
+  width: min(100%, 760px);
+}
+
+.staged-tab-body-wide {
+  width: min(100%, 820px);
+}
+
+.staged-tab-shell .section-header {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.staged-tab-shell .section-header > div {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.staged-tab-shell .section-copy {
+  max-width: 56ch;
+  text-align: center;
+}
+
+.staged-tab-results {
+  width: 100%;
+  animation: rise 320ms ease both;
+}
+
+.staged-tab-results-narrow {
+  max-width: 760px;
+  margin-inline: auto;
+}
+
+.staged-tab-results-wide {
+  max-width: 1120px;
+  margin-inline: auto;
+}
+
 .knowledge-chat {
   display: flex;
   flex-direction: column;
@@ -949,6 +1020,19 @@ textarea {
 }
 
 @media (max-width: 760px) {
+  .staged-tab-stage {
+    min-height: calc(100svh - 140px);
+  }
+
+  .staged-tab-header,
+  .staged-tab-body,
+  .staged-tab-body-wide,
+  .staged-tab-results-narrow,
+  .staged-tab-results-wide {
+    width: 100%;
+    max-width: none;
+  }
+
   .knowledge-chat {
     min-height: calc(100svh - 140px);
   }

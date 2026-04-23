@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useLayoutEffect, useRef, useState } from "react";
 
 import { SectionIntro } from "../../../components/ui/SectionIntro";
 import { useScrollIntoViewOnChange } from "../../../hooks/useScrollIntoViewOnChange";
@@ -552,7 +552,9 @@ function buildPublicationPdfBlob(content: PublicationReportContent): Blob {
 }
 
 export function PublicationGeneratorTab() {
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const resultsRef = useRef<HTMLDivElement | null>(null);
+  const previousShellRectRef = useRef<DOMRect | null>(null);
   const [form, setForm] = useState<PublicationFormValues>(defaultPublicationForm);
   const [publication, setPublication] = useState<PublicationPackage | null>(null);
   const [reviewNotes, setReviewNotes] = useState<string[]>([]);
@@ -567,9 +569,46 @@ export function PublicationGeneratorTab() {
   const hasRequiredValues =
     isFilled(form.productName) && isFilled(form.platform) && isFilled(form.audience) && isFilled(form.goal);
   const canGenerate = hasRequiredValues && !isSubmitting && !hasGeneratedCurrentPublication;
-  const resultMessage = error || (!hasRequiredValues ? "Fill in all required fields to generate a publication." : null);
+  const hasCompletedPublication = Boolean(publication) || Boolean(error);
 
-  useScrollIntoViewOnChange(resultsRef, publication ?? resultMessage);
+  useScrollIntoViewOnChange(resultsRef, publication ?? error);
+
+  useLayoutEffect(() => {
+    const shell = shellRef.current;
+    if (!shell) {
+      previousShellRectRef.current = null;
+      return;
+    }
+
+    const nextRect = shell.getBoundingClientRect();
+    const previousRect = previousShellRectRef.current;
+
+    if (previousRect) {
+      const deltaX = previousRect.left - nextRect.left;
+      const deltaY = previousRect.top - nextRect.top;
+
+      if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
+        shell.animate(
+          [
+            {
+              transform: `translate(${deltaX}px, ${deltaY}px)`,
+              transformOrigin: "top center",
+            },
+            {
+              transform: "translate(0, 0)",
+              transformOrigin: "top center",
+            },
+          ],
+          {
+            duration: 440,
+            easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+          },
+        );
+      }
+    }
+
+    previousShellRectRef.current = nextRect;
+  }, [hasCompletedPublication]);
 
   function handleFieldChange(event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const target = event.target;
@@ -712,74 +751,85 @@ export function PublicationGeneratorTab() {
   }
 
   return (
-    <div className="tab-layout">
-      <SectionIntro
-        eyebrow="Publication Generator"
-        title="Build a structured publication package"
-      />
+    <div className={`tab-layout staged-tab ${hasCompletedPublication ? "is-active" : ""}`}>
+      <div className="staged-tab-stage">
+        <div ref={shellRef} className="staged-tab-shell">
+          <div className="staged-tab-header">
+            <SectionIntro
+              eyebrow="Publication Generator"
+              title="Build a structured publication package"
+            />
+          </div>
 
-      <form className="brief-form" onSubmit={handleSubmit}>
-        <div className="field-grid">
-          <label>
-            Product Name
-            <input name="productName" value={form.productName} onChange={handleFieldChange} required />
-          </label>
+          <div className="staged-tab-body">
+            <form className="brief-form" onSubmit={handleSubmit}>
+              <div className="field-grid">
+                <label>
+                  Product Name
+                  <input name="productName" value={form.productName} onChange={handleFieldChange} required />
+                </label>
 
-          <label>
-            Platform
-            <select name="platform" value={form.platform} onChange={handleFieldChange} required>
-              {PLATFORM_OPTIONS.map((platform) => (
-                <option key={platform} value={platform}>
-                  {platform}
-                </option>
-              ))}
-            </select>
-          </label>
+                <label>
+                  Platform
+                  <select name="platform" value={form.platform} onChange={handleFieldChange} required>
+                    {PLATFORM_OPTIONS.map((platform) => (
+                      <option key={platform} value={platform}>
+                        {platform}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-          <label>
-            Audience
-            <input name="audience" value={form.audience} onChange={handleFieldChange} required />
-          </label>
+                <label>
+                  Audience
+                  <input name="audience" value={form.audience} onChange={handleFieldChange} required />
+                </label>
 
-          <label>
-            Goal
-            <input name="goal" value={form.goal} onChange={handleFieldChange} required />
-          </label>
+                <label>
+                  Goal
+                  <input name="goal" value={form.goal} onChange={handleFieldChange} required />
+                </label>
+              </div>
+
+              <label className="checkbox-row">
+                <input
+                  name="generateImage"
+                  type="checkbox"
+                  checked={form.generateImage}
+                  onChange={handleFieldChange}
+                />
+                Generate image guidance in the package.
+              </label>
+
+              <div className="form-actions form-actions-center">
+                <button
+                  className="primary-action primary-action-pill analysis-action"
+                  type="submit"
+                  disabled={!canGenerate}
+                  aria-live="polite"
+                >
+                  {isSubmitting ? <span className="button-spinner" aria-hidden="true" /> : null}
+                  <span>{isSubmitting ? "Generating..." : hasGeneratedCurrentPublication ? "Done" : "Generate Publication"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
 
-        <label className="checkbox-row">
-          <input
-            name="generateImage"
-            type="checkbox"
-            checked={form.generateImage}
-            onChange={handleFieldChange}
-          />
-          Generate image guidance in the package.
-        </label>
-
-        <div className="form-actions form-actions-center">
-          <button
-            className="primary-action primary-action-pill analysis-action"
-            type="submit"
-            disabled={!canGenerate}
-            aria-live="polite"
+        {error ? (
+          <div
+            ref={resultsRef}
+            className="result-stack staged-tab-results staged-tab-results-narrow result-message-panel"
+            role="alert"
           >
-            {isSubmitting ? <span className="button-spinner" aria-hidden="true" /> : null}
-            <span>{isSubmitting ? "Generating..." : hasGeneratedCurrentPublication ? "Done" : "Generate Publication"}</span>
-          </button>
-        </div>
-      </form>
+            <p className="eyebrow">Publication not ready</p>
+            <h3>We could not finish the publication package</h3>
+            <p>{error}</p>
+          </div>
+        ) : null}
 
-      {!publication && resultMessage ? (
-        <div ref={resultsRef} className="result-stack result-message-panel" role={error ? "alert" : "status"}>
-          <p className="eyebrow">{error ? "Publication not ready" : "Ready when complete"}</p>
-          <h3>{error ? "Review needed before showing the publication" : "Complete the brief to continue"}</h3>
-          <p>{resultMessage}</p>
-        </div>
-      ) : null}
-
-      {publication ? (
-        <div ref={resultsRef} className="result-stack publication-report">
+        {publication ? (
+          <div ref={resultsRef} className="result-stack staged-tab-results publication-report">
           <header className="report-header">
             <p className="eyebrow">Publication Draft</p>
             <h3>{publication.headline}</h3>
@@ -906,8 +956,9 @@ export function PublicationGeneratorTab() {
           <p className="report-action-status" aria-live="polite">
             {actionMessage}
           </p>
-        </div>
-      ) : null}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

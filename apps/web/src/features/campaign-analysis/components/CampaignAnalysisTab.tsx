@@ -3,6 +3,7 @@ import {
   DragEvent,
   KeyboardEvent,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -49,7 +50,9 @@ function UploadCloudIcon() {
 
 export function CampaignAnalysisTab() {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const resultsRef = useRef<HTMLDivElement | null>(null);
+  const previousShellRectRef = useRef<DOMRect | null>(null);
   const [fileName, setFileName] = useState("");
   const [csvText, setCsvText] = useState("");
   const [result, setResult] = useState<LocalAnalysisResult | null>(null);
@@ -62,8 +65,46 @@ export function CampaignAnalysisTab() {
   const hasUploadedCsv = csvText.length > 0;
   const hasAnalyzedCurrentCsv = hasUploadedCsv && lastAnalyzedCsvText === csvText && result !== null;
   const canAnalyze = hasUploadedCsv && !isAnalyzing && !hasAnalyzedCurrentCsv;
+  const hasCompletedAnalysis = Boolean(result) || Boolean(error);
 
-  useScrollIntoViewOnChange(resultsRef, result);
+  useScrollIntoViewOnChange(resultsRef, result ?? error);
+
+  useLayoutEffect(() => {
+    const shell = shellRef.current;
+    if (!shell) {
+      previousShellRectRef.current = null;
+      return;
+    }
+
+    const nextRect = shell.getBoundingClientRect();
+    const previousRect = previousShellRectRef.current;
+
+    if (previousRect) {
+      const deltaX = previousRect.left - nextRect.left;
+      const deltaY = previousRect.top - nextRect.top;
+
+      if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
+        shell.animate(
+          [
+            {
+              transform: `translate(${deltaX}px, ${deltaY}px)`,
+              transformOrigin: "top center",
+            },
+            {
+              transform: "translate(0, 0)",
+              transformOrigin: "top center",
+            },
+          ],
+          {
+            duration: 440,
+            easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+          },
+        );
+      }
+    }
+
+    previousShellRectRef.current = nextRect;
+  }, [hasCompletedAnalysis]);
 
   useEffect(() => {
     if (!hasUploadedCsv) {
@@ -170,170 +211,184 @@ export function CampaignAnalysisTab() {
   }
 
   return (
-    <div className="tab-layout">
-      <SectionIntro
-        eyebrow="Campaign Analysis"
-        title="Upload a performance snapshot"
-      />
+    <div className={`tab-layout staged-tab ${hasCompletedAnalysis ? "is-active" : ""}`}>
+      <div className="staged-tab-stage">
+        <div ref={shellRef} className="staged-tab-shell">
+          <div className="staged-tab-header">
+            <SectionIntro
+              eyebrow="Campaign Analysis"
+              title="Upload a performance snapshot"
+            />
+          </div>
 
-      {error ? (
-        <p className="error-banner" role="alert">
-          {error}
-        </p>
-      ) : null}
+          <div className="staged-tab-body staged-tab-body-wide">
+            <div className="campaign-upload-stack">
+              <div
+                className={`upload-zone campaign-dropzone ${isDragActive ? "is-drag-active" : ""}`}
+                role="button"
+                tabIndex={0}
+                onClick={openFilePicker}
+                onKeyDown={handleDropzoneKeyDown}
+                onDragOver={handleDragOver}
+                onDragEnter={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                aria-label="Select campaign CSV"
+              >
+                <input
+                  ref={inputRef}
+                  className="visually-hidden-input"
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileChange}
+                  onClick={(event) => {
+                    event.currentTarget.value = "";
+                  }}
+                  aria-label="Campaign CSV file input"
+                />
+                <UploadCloudIcon />
+                <span>Campaign CSV</span>
+                <strong>{fileName || "Drop your CSV here or click to browse."}</strong>
+                <small>Required columns: campaign_id, impressions, clicks, spend, conversions, revenue</small>
+              </div>
 
-      <div className="campaign-upload-stack">
-        <div
-          className={`upload-zone campaign-dropzone ${isDragActive ? "is-drag-active" : ""}`}
-          role="button"
-          tabIndex={0}
-          onClick={openFilePicker}
-          onKeyDown={handleDropzoneKeyDown}
-          onDragOver={handleDragOver}
-          onDragEnter={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          aria-label="Select campaign CSV"
-        >
-          <input
-            ref={inputRef}
-            className="visually-hidden-input"
-            type="file"
-            accept=".csv"
-            onChange={handleFileChange}
-            onClick={(event) => {
-              event.currentTarget.value = "";
-            }}
-            aria-label="Campaign CSV file input"
-          />
-          <UploadCloudIcon />
-          <span>Campaign CSV</span>
-          <strong>{fileName || "Drop your CSV here or click to browse."}</strong>
-          <small>Required columns: campaign_id, impressions, clicks, spend, conversions, revenue</small>
+              {hasUploadedCsv ? (
+                <div className={`analysis-action-reveal ${isActionVisible ? "is-visible" : ""}`}>
+                  <button
+                    className="primary-action primary-action-pill analysis-action"
+                    type="button"
+                    onClick={handleAnalyze}
+                    disabled={!canAnalyze}
+                    aria-live="polite"
+                  >
+                    {isAnalyzing ? <span className="button-spinner" aria-hidden="true" /> : null}
+                    <span>{isAnalyzing ? "Analyzing..." : hasAnalyzedCurrentCsv ? "Done" : "Analyze Campaigns"}</span>
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
         </div>
 
-        {hasUploadedCsv ? (
-          <div className={`analysis-action-reveal ${isActionVisible ? "is-visible" : ""}`}>
-            <button
-              className="primary-action primary-action-pill analysis-action"
-              type="button"
-              onClick={handleAnalyze}
-              disabled={!canAnalyze}
-              aria-live="polite"
-            >
-              {isAnalyzing ? <span className="button-spinner" aria-hidden="true" /> : null}
-              <span>{isAnalyzing ? "Analyzing..." : hasAnalyzedCurrentCsv ? "Done" : "Analyze Campaigns"}</span>
-            </button>
+        {error ? (
+          <div
+            ref={resultsRef}
+            className="result-stack staged-tab-results staged-tab-results-narrow result-message-panel"
+            role="alert"
+          >
+            <p className="eyebrow">Analysis not ready</p>
+            <h3>We could not finish the campaign analysis</h3>
+            <p>{error}</p>
+          </div>
+        ) : null}
+
+        {result ? (
+          <div ref={resultsRef} className="result-stack staged-tab-results staged-tab-results-wide">
+            <div className="kpi-grid">
+              <article className="kpi-card">
+                <span>CTR</span>
+                <strong>{formatPercent(result.overall.ctr_percent)}</strong>
+              </article>
+              <article className="kpi-card">
+                <span>Conversion Rate</span>
+                <strong>{formatPercent(result.overall.conversion_rate_percent)}</strong>
+              </article>
+              <article className="kpi-card">
+                <span>CPA</span>
+                <strong>{formatCurrency(result.overall.cpa)}</strong>
+              </article>
+              <article className="kpi-card">
+                <span>ROAS</span>
+                <strong>{result.overall.roas.toFixed(2)}x</strong>
+              </article>
+              <article className="kpi-card">
+                <span>ROI</span>
+                <strong>{formatPercent(result.overall.roi_percent)}</strong>
+              </article>
+            </div>
+
+            <div className="spotlight-grid spotlight-grid-three">
+              <article className="spotlight-card success">
+                <p className="eyebrow">Best Campaign</p>
+                <h3>{result.bestCampaign?.campaign_id ?? "N/A"}</h3>
+                <p>
+                  {result.bestCampaign?.platform ?? "Platform unknown"} with{" "}
+                  {result.bestCampaign ? `${result.bestCampaign.roas.toFixed(2)}x ROAS` : "no score yet"}
+                </p>
+              </article>
+
+              <article className="spotlight-card caution">
+                <p className="eyebrow">Watch List</p>
+                <h3>{result.weakestCampaign?.campaign_id ?? "N/A"}</h3>
+                <p>
+                  {result.weakestCampaign?.platform ?? "Platform unknown"} with{" "}
+                  {result.weakestCampaign ? `${result.weakestCampaign.roas.toFixed(2)}x ROAS` : "no score yet"}
+                </p>
+              </article>
+
+              <article className="spotlight-card neutral">
+                <p className="eyebrow">Budget Snapshot</p>
+                <h3>{formatCurrency(result.overall.total_spend)}</h3>
+                <p>{formatCurrency(result.overall.total_revenue)} revenue tracked in this upload.</p>
+              </article>
+            </div>
+
+            <article className="detail-card">
+              <div className="card-header">
+                <div>
+                  <p className="eyebrow">Campaign Performance</p>
+                  <h3>Performance table</h3>
+                </div>
+              </div>
+
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Campaign</th>
+                      <th>Platform</th>
+                      <th>Audience</th>
+                      <th>CTR</th>
+                      <th>CVR</th>
+                      <th>CPA</th>
+                      <th>ROAS</th>
+                      <th>ROI</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.campaigns.map((campaign) => (
+                      <tr key={campaign.campaign_id}>
+                        <td>{campaign.campaign_id}</td>
+                        <td>{campaign.platform ?? "N/A"}</td>
+                        <td>{campaign.audience ?? "N/A"}</td>
+                        <td>{formatPercent(campaign.ctr_percent)}</td>
+                        <td>{formatPercent(campaign.conversion_rate_percent)}</td>
+                        <td>{formatCurrency(campaign.cpa)}</td>
+                        <td>{campaign.roas.toFixed(2)}x</td>
+                        <td>{formatPercent(campaign.roi_percent)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </article>
+
+            <article className="detail-card">
+              <div className="card-header">
+                <div>
+                  <p className="eyebrow">Optimization</p>
+                  <h3>Recommendations</h3>
+                </div>
+              </div>
+              <ul className="bullet-list">
+                {result.recommendations.map((recommendation) => (
+                  <li key={recommendation}>{recommendation}</li>
+                ))}
+              </ul>
+            </article>
           </div>
         ) : null}
       </div>
-
-      {result ? (
-        <div ref={resultsRef} className="result-stack">
-          <div className="kpi-grid">
-            <article className="kpi-card">
-              <span>CTR</span>
-              <strong>{formatPercent(result.overall.ctr_percent)}</strong>
-            </article>
-            <article className="kpi-card">
-              <span>Conversion Rate</span>
-              <strong>{formatPercent(result.overall.conversion_rate_percent)}</strong>
-            </article>
-            <article className="kpi-card">
-              <span>CPA</span>
-              <strong>{formatCurrency(result.overall.cpa)}</strong>
-            </article>
-            <article className="kpi-card">
-              <span>ROAS</span>
-              <strong>{result.overall.roas.toFixed(2)}x</strong>
-            </article>
-            <article className="kpi-card">
-              <span>ROI</span>
-              <strong>{formatPercent(result.overall.roi_percent)}</strong>
-            </article>
-          </div>
-
-          <div className="spotlight-grid spotlight-grid-three">
-            <article className="spotlight-card success">
-              <p className="eyebrow">Best Campaign</p>
-              <h3>{result.bestCampaign?.campaign_id ?? "N/A"}</h3>
-              <p>
-                {result.bestCampaign?.platform ?? "Platform unknown"} with{" "}
-                {result.bestCampaign ? `${result.bestCampaign.roas.toFixed(2)}x ROAS` : "no score yet"}
-              </p>
-            </article>
-
-            <article className="spotlight-card caution">
-              <p className="eyebrow">Watch List</p>
-              <h3>{result.weakestCampaign?.campaign_id ?? "N/A"}</h3>
-              <p>
-                {result.weakestCampaign?.platform ?? "Platform unknown"} with{" "}
-                {result.weakestCampaign ? `${result.weakestCampaign.roas.toFixed(2)}x ROAS` : "no score yet"}
-              </p>
-            </article>
-
-            <article className="spotlight-card neutral">
-              <p className="eyebrow">Budget Snapshot</p>
-              <h3>{formatCurrency(result.overall.total_spend)}</h3>
-              <p>{formatCurrency(result.overall.total_revenue)} revenue tracked in this upload.</p>
-            </article>
-          </div>
-
-          <article className="detail-card">
-            <div className="card-header">
-              <div>
-                <p className="eyebrow">Campaign Performance</p>
-                <h3>Performance table</h3>
-              </div>
-            </div>
-
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Campaign</th>
-                    <th>Platform</th>
-                    <th>Audience</th>
-                    <th>CTR</th>
-                    <th>CVR</th>
-                    <th>CPA</th>
-                    <th>ROAS</th>
-                    <th>ROI</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.campaigns.map((campaign) => (
-                    <tr key={campaign.campaign_id}>
-                      <td>{campaign.campaign_id}</td>
-                      <td>{campaign.platform ?? "N/A"}</td>
-                      <td>{campaign.audience ?? "N/A"}</td>
-                      <td>{formatPercent(campaign.ctr_percent)}</td>
-                      <td>{formatPercent(campaign.conversion_rate_percent)}</td>
-                      <td>{formatCurrency(campaign.cpa)}</td>
-                      <td>{campaign.roas.toFixed(2)}x</td>
-                      <td>{formatPercent(campaign.roi_percent)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </article>
-
-          <article className="detail-card">
-            <div className="card-header">
-              <div>
-                <p className="eyebrow">Optimization</p>
-                <h3>Recommendations</h3>
-              </div>
-            </div>
-            <ul className="bullet-list">
-              {result.recommendations.map((recommendation) => (
-                <li key={recommendation}>{recommendation}</li>
-              ))}
-            </ul>
-          </article>
-        </div>
-      ) : null}
     </div>
   );
 }

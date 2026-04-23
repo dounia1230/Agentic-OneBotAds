@@ -11,6 +11,30 @@ ChromaDB is used as the persistent local vector store for private marketing know
 - Embedding model: `nomic-embed-text:latest`
 - Text model for query workflows: `qwen3:8b`
 - Source documents: `data/knowledge_base`
+- Retrieval strategy: semantic search plus metadata filters for shared, brand, and campaign scope
+
+## Recommended Knowledge Layout
+
+Use directory structure to control retrieval scope:
+
+```text
+data/knowledge_base/
+|- shared/
+|  `- platform_ads_rules.md
+`- brands/
+   `- your-brand/
+      |- brand_guidelines.md
+      `- campaigns/
+         `- holiday-launch/
+            `- brief.md
+```
+
+Metadata assignment:
+
+- files under `shared/` are indexed as shared knowledge
+- files under `brands/<brand>/` are indexed as brand knowledge
+- files under `brands/<brand>/campaigns/<campaign>/` are indexed as campaign knowledge
+- legacy files at the root are treated as belonging to the repo's default brand
 
 ## Build The Index
 
@@ -61,6 +85,10 @@ Expected result:
 ```json
 {
   "message": "What are the main audience personas and tone rules for Agentic OneBotAds?",
+  "product_name": "Agentic OneBotAds",
+  "knowledge_scope": {
+    "brand_name": "Agentic OneBotAds"
+  },
   "run_all_agents": false,
   "save_output": false,
   "export_report": false
@@ -82,6 +110,22 @@ Check these response fields:
 - `rag.relevant_context`
 - `rag.source_documents`
 - `rag.confidence`
+
+### Step 3: Test A Specific Brand Or Campaign
+
+```json
+{
+  "message": "What positioning and tone should I use for the Spring Launch plushie campaign?",
+  "product_name": "CuddleNest Plushies",
+  "knowledge_scope": {
+    "brand_name": "CuddleNest Plushies",
+    "campaign_name": "Spring Launch"
+  },
+  "run_all_agents": false,
+  "save_output": false,
+  "export_report": false
+}
+```
 
 ## Reset The Vector Store
 

@@ -25,6 +25,11 @@ def draft_campaign(brief: CampaignBrief, service: CampaignServiceDep) -> Campaig
 def run_assistant(request: AssistantRequest, service: CampaignServiceDep) -> AssistantResponse:
     return service.handle_request(
         request.message,
+        product_name=request.product_name,
+        audience=request.audience,
+        goal=request.goal,
+        platform=request.platform,
+        knowledge_scope=request.knowledge_scope,
         run_all_agents=request.run_all_agents,
         save_output=request.save_output,
         export_report=request.export_report,

@@ -12,6 +12,7 @@ from onebot_ads.agents.reporting_agent import ReportingAgent
 from onebot_ads.core.config import Settings
 from onebot_ads.rag.knowledge_base import KnowledgeBaseService
 from onebot_ads.schemas.campaigns import AssistantResponse, OrchestrationPlan
+from onebot_ads.schemas.knowledge import KnowledgeScope
 
 SYSTEM_PROMPT = """
 You are the Orchestrator Agent of Agentic OneBotAds.
@@ -84,6 +85,7 @@ class RequestContext:
     tone: str
     goal: str
     product_name: str
+    knowledge_scope: KnowledgeScope | None
     wants_image_prompt: bool
     wants_image_generation: bool
     wants_report_export: bool
@@ -111,11 +113,21 @@ class OrchestratorAgent:
         self,
         user_message: str,
         *,
+        product_name: str | None = None,
+        audience: str | None = None,
+        goal: str | None = None,
+        platform: str | None = None,
+        knowledge_scope: KnowledgeScope | None = None,
         run_all_agents: bool = False,
         export_report: bool = False,
     ) -> AssistantResponse:
         context = self._build_request_context(
             user_message,
+            product_name=product_name,
+            audience=audience,
+            goal=goal,
+            platform=platform,
+            knowledge_scope=knowledge_scope,
             run_all_agents=run_all_agents,
             export_report=export_report,
         )
@@ -136,7 +148,7 @@ class OrchestratorAgent:
         publication_result = None
 
         if "rag_agent" in plan.agents_to_call:
-            rag_result = self.rag_agent.run(user_message)
+            rag_result = self.rag_agent.run(user_message, knowledge_scope=context.knowledge_scope)
             response.rag = rag_result
         if "analyst_agent" in plan.agents_to_call:
             analysis_result = self.analyst_agent.run()
@@ -268,6 +280,11 @@ class OrchestratorAgent:
         self,
         user_message: str,
         *,
+        product_name: str | None = None,
+        audience: str | None = None,
+        goal: str | None = None,
+        platform: str | None = None,
+        knowledge_scope: KnowledgeScope | None = None,
         run_all_agents: bool = False,
         export_report: bool = False,
     ) -> RequestContext:
@@ -287,9 +304,12 @@ class OrchestratorAgent:
         elif any(token in message for token in ["publication", "post", "ad package"]):
             intent = "generate_publication"
 
-        platform = self._match_platform(message)
-        audience = self._extract_value(user_message, r"(?:targeting|for)\s+([A-Za-z0-9 ,&-]+)")
-        goal = self._extract_value(user_message, r"(?:goal|to)\s+([A-Za-z0-9 ,&-]+)")
+        resolved_platform = platform or self._match_platform(message)
+        resolved_audience = audience or self._extract_value(
+            user_message,
+            r"(?:targeting|for)\s+([A-Za-z0-9 ,&-]+)",
+        )
+        resolved_goal = goal or self._extract_value(user_message, r"(?:goal|to)\s+([A-Za-z0-9 ,&-]+)")
         wants_image_prompt = (
             "image" in message or "visual" in message or intent == "generate_publication"
         )
@@ -304,11 +324,12 @@ class OrchestratorAgent:
         return RequestContext(
             user_message=user_message,
             intent=intent,
-            platform=platform,
-            audience=audience or "SMEs and marketing teams",
+            platform=resolved_platform,
+            audience=resolved_audience or "SMEs and marketing teams",
             tone="professional, modern, direct",
-            goal=goal or default_goal,
-            product_name="Agentic OneBotAds",
+            goal=resolved_goal or default_goal,
+            product_name=product_name or "Agentic OneBotAds",
+            knowledge_scope=knowledge_scope,
             wants_image_prompt=wants_image_prompt,
             wants_image_generation=wants_image_generation,
             wants_report_export=(

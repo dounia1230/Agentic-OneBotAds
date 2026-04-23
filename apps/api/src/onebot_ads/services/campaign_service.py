@@ -32,12 +32,22 @@ class CampaignService:
         self,
         user_message: str,
         *,
+        product_name: str | None = None,
+        audience: str | None = None,
+        goal: str | None = None,
+        platform: str | None = None,
+        knowledge_scope=None,
         run_all_agents: bool = False,
         save_output: bool = False,
         export_report: bool = False,
     ) -> AssistantResponse:
         result = self.orchestrator_agent.run(
             user_message,
+            product_name=product_name,
+            audience=audience,
+            goal=goal,
+            platform=platform,
+            knowledge_scope=knowledge_scope,
             run_all_agents=run_all_agents,
             export_report=export_report,
         )
@@ -71,7 +81,7 @@ class CampaignService:
             rag_enabled=self.settings.enable_rag,
             image_generation_enabled=self.settings.enable_image_generation,
             image_provider=self.settings.image_provider,
-            image_model=self.settings.qwen_image_space_id,
+            image_model=self.settings.image_model_id,
             knowledge_base_directory=self._serialize_runtime_path(self.settings.knowledge_base_path),
             outputs_directory=self._serialize_runtime_path(self.settings.outputs_directory),
         )

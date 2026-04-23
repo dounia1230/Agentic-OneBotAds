@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
 
+from onebot_ads.schemas.knowledge import KnowledgeScope
+
 
 class OrchestrationPlan(BaseModel):
     intent: str
@@ -9,6 +11,11 @@ class OrchestrationPlan(BaseModel):
 
 class AssistantRequest(BaseModel):
     message: str = Field(min_length=3)
+    product_name: str | None = Field(default=None, max_length=120)
+    audience: str | None = Field(default=None, max_length=240)
+    goal: str | None = Field(default=None, max_length=240)
+    platform: str | None = Field(default=None, max_length=80)
+    knowledge_scope: KnowledgeScope | None = None
     run_all_agents: bool = False
     save_output: bool = False
     export_report: bool = False

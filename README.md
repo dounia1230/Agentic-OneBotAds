@@ -151,6 +151,45 @@ Frontend runs on `http://localhost:5173`. Backend runs on `http://127.0.0.1:8000
 - `POST /api/v1/assistant/run`
 - `POST /api/v1/rag/reindex`
 
+## Knowledge Base Scoping
+
+RAG now supports brand and campaign scoping through metadata filters instead of one mixed search pool.
+
+Recommended layout:
+
+```text
+data/knowledge_base/
+|- shared/
+|  `- platform_ads_rules.md
+`- brands/
+   `- cuddlenest-plushies/
+      |- brand_guidelines.md
+      `- campaigns/
+         `- spring-launch/
+            `- brief.md
+```
+
+Request-level scoping:
+
+- `POST /api/v1/assistant/run` accepts optional `product_name`, `audience`, `goal`, `platform`, and `knowledge_scope`
+- `POST /api/v1/campaigns/draft` accepts optional `brand_name`, `campaign_name`, and `knowledge_scope`
+
+Example assistant payload:
+
+```json
+{
+  "message": "Create a launch campaign for CuddleNest Plushies.",
+  "product_name": "CuddleNest Plushies",
+  "platform": "Instagram",
+  "audience": "parents and gift buyers",
+  "goal": "increase first-time sales",
+  "knowledge_scope": {
+    "brand_name": "CuddleNest Plushies",
+    "campaign_name": "Spring Launch"
+  }
+}
+```
+
 ## Draft Image Test
 
 ```bash

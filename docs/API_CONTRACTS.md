@@ -22,6 +22,48 @@ reflects the configured Hugging Face Space id.
 }
 ```
 
+## Assistant Request
+
+```json
+{
+  "message": "Create a launch campaign for CuddleNest Plushies.",
+  "product_name": "CuddleNest Plushies",
+  "platform": "Instagram",
+  "audience": "parents and gift buyers",
+  "goal": "increase first-time sales",
+  "knowledge_scope": {
+    "brand_name": "CuddleNest Plushies",
+    "campaign_name": "Spring Launch"
+  },
+  "run_all_agents": false,
+  "save_output": false,
+  "export_report": false
+}
+```
+
+## Campaign Draft Request
+
+```json
+{
+  "brand_name": "CuddleNest Plushies",
+  "campaign_name": "Spring Launch",
+  "product_name": "CuddleNest Plushies",
+  "audience": "parents and gift buyers",
+  "goal": "increase first-time sales",
+  "channels": ["instagram", "facebook"],
+  "tone": "warm, playful, trustworthy",
+  "offer": "10% off first order",
+  "key_points": ["giftable plushies", "collectible designs"],
+  "brand_constraints": ["no exaggerated safety claims"],
+  "source_context_query": "Spring Launch plushie positioning",
+  "knowledge_scope": {
+    "brand_name": "CuddleNest Plushies",
+    "campaign_name": "Spring Launch"
+  },
+  "generate_image_prompt": true
+}
+```
+
 ## Campaign Analysis
 
 ```json

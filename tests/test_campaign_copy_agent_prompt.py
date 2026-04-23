@@ -4,7 +4,7 @@ from onebot_ads.schemas.campaigns import CampaignBrief
 
 
 class EmptyKnowledgeBase:
-    def retrieve(self, query: str, top_k: int = 3) -> list:
+    def retrieve(self, query: str, top_k: int = 3, scope=None) -> list:
         return []
 
     def reindex(self):

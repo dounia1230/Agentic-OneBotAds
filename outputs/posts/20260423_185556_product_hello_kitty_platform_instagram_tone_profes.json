@@ -1,0 +1,254 @@
+{
+  "intent": "full_workflow",
+  "plan": {
+    "intent": "full_workflow",
+    "agents_to_call": [
+      "rag_agent",
+      "analyst_agent",
+      "creative_agent",
+      "image_agent",
+      "optimization_agent",
+      "compliance_agent",
+      "publication_agent",
+      "reporting_agent"
+    ],
+    "final_format": "full_workflow_bundle"
+  },
+  "rag": {
+    "answer": "Brand role:\n- Agentic OneBotAds should be positioned as a practical AI-assisted marketing and ads operator.\nVoice attributes:\n- clear, direct, confident but not inflated, helpful, specific\nTone rules:\n- Prefer concrete outcomes over abstract promises.\n- Prefer \"what this helps you do\" over \"revolutionary innovation.\"\n- Use short sentences.\n- Explain process in plain language.\nAvoid:\n- guaranteed results, instant success claims, risk-free profit, perfect targeting, done-for-you magic wording\nSources:\n- audience_personas.md\n- brand_guidelines.md",
+    "relevant_context": [
+      "More Campaign Clarity. - body_copy_summary: brings reporting, creative generation, and budget recommendations into one AI-assisted workflow - cta: Learn more - landing_page_angle: reduce operational friction across campaign work - creative_format: static image or simple motion gr",
+      "# Brand Guidelines ## Purpose This file is the voice and messaging source of truth for Agentic OneBotAds. This is starter content. Replace assumptions with language from the real homepage, sales deck, FAQ, onboarding flow, and customer conversations. ## Brand Role Agentic On",
+      "md - status: active - last_updated: 2026-04-23 ### Entry: Campaign Context Pack - name: Campaign Context Pack - category: workflow - short_description: package offer, audience, channel, and policy context for campaign generation - audience_fit: marketers, agencies, founders - p"
+    ],
+    "source_documents": [
+      "previous_ads_examples.md",
+      "brand_guidelines.md",
+      "product_catalog.md",
+      "example_brand_playbook.md"
+    ],
+    "confidence": "medium"
+  },
+  "analysis": {
+    "summary": {
+      "ctr": "3.96%",
+      "conversion_rate": "8.48%",
+      "cpa": "20.22",
+      "roas": "3.53",
+      "roi": "252.78%"
+    },
+    "best_campaign": "CAMP003",
+    "weakest_campaign": "CAMP001",
+    "main_problem": "Some campaigns are spending budget without matching conversion efficiency.",
+    "insights": [
+      "LinkedIn SMEs is the strongest revenue-efficient segment.",
+      "Improve the weakest campaign with a sharper, benefit-led hook."
+    ],
+    "campaign_breakdown": [
+      {
+        "campaign_id": "CAMP001",
+        "platform": "Facebook",
+        "audience": "Students",
+        "ctr_percent": 3.2,
+        "conversion_rate_percent": 7.81,
+        "cpa": 20.0,
+        "roas": 2.4,
+        "roi_percent": 140.0,
+        "spend": 500.0,
+        "revenue": 1200.0,
+        "clicks": 320,
+        "conversions": 25,
+        "impressions": 10000
+      },
+      {
+        "campaign_id": "CAMP002",
+        "platform": "Instagram",
+        "audience": "Young Professionals",
+        "ctr_percent": 4.0,
+        "conversion_rate_percent": 8.0,
+        "cpa": 18.75,
+        "roas": 3.11,
+        "roi_percent": 211.11,
+        "spend": 900.0,
+        "revenue": 2800.0,
+        "clicks": 600,
+        "conversions": 48,
+        "impressions": 15000
+      },
+      {
+        "campaign_id": "CAMP003",
+        "platform": "LinkedIn",
+        "audience": "SMEs",
+        "ctr_percent": 3.5,
+        "conversion_rate_percent": 12.5,
+        "cpa": 20.0,
+        "roas": 5.0,
+        "roi_percent": 400.0,
+        "spend": 700.0,
+        "revenue": 3500.0,
+        "clicks": 280,
+        "conversions": 35,
+        "impressions": 8000
+      },
+      {
+        "campaign_id": "CAMP004",
+        "platform": "Google Ads",
+        "audience": "Ecommerce",
+        "ctr_percent": 4.5,
+        "conversion_rate_percent": 7.78,
+        "cpa": 21.43,
+        "roas": 3.47,
+        "roi_percent": 246.67,
+        "spend": 1500.0,
+        "revenue": 5200.0,
+        "clicks": 900,
+        "conversions": 70,
+        "impressions": 20000
+      }
+    ],
+    "raw_data_path": "data\\campaigns.csv"
+  },
+  "creative": {
+    "headline": "Streamline Your Campaigns with AI-Powered Precision",
+    "primary_text": "Agentic OneBotAds reduces operational friction by combining reporting, creative generation, and budget recommendations into one AI-assisted workflow. Save time, boost ROI, and focus on what matters.",
+    "description": "Say goodbye to manual campaign setup. Our platform automates smart budgeting, generates creative assets, and delivers real-time performance insights—all in one place. Perfect for marketers who want faster results without the guesswork.",
+    "slogan": "Smart Campaigns, Simplified",
+    "cta": "Learn more",
+    "hashtags": [
+      "#MarketingTools",
+      "#AIAdvertising",
+      "#SMEMarketing",
+      "#CampaignOptimization"
+    ],
+    "ab_variants": [
+      {
+        "headline": "Cut Hours from Your Workflow",
+        "primary_text": "Agentic OneBotAds automates campaign setup, budgeting, and creative generation. Focus on strategy while we handle the execution. Ready to save time?"
+      },
+      {
+        "headline": "Boost ROI Without the Hassle",
+        "primary_text": "Agentic OneBotAds delivers smarter budgets, faster setup, and actionable insights. Ideal for teams looking to maximize impact with minimal effort."
+      }
+    ]
+  },
+  "image": {
+    "image_prompt": "Clean professional SaaS marketing background for an AI advertising assistant, Agentic OneBotAds for SMEs and marketing teams, Instagram publication format, abstract dashboard shapes, business productivity mood, blue and white modern tech aesthetic, soft gradients, clean composition, empty space for text overlay, high quality, no text, no words, no letters, no logos, no watermark, no fake UI labels, no readable dashboard text",
+    "negative_prompt": "words, letters, text, watermark, logo, distorted UI, unreadable dashboard, blurry, low quality, fake brand marks",
+    "alt_text": "Clean professional marketing background for Agentic OneBotAds.",
+    "provider": "qwen_image",
+    "backend": "huggingface_space",
+    "space_id": "Qwen/Qwen-Image-2512",
+    "background_image_path": null,
+    "publication_image_path": null,
+    "image_path": null,
+    "image_url": null,
+    "status": "prompt_ready",
+    "error": null,
+    "notes": [],
+    "fallback_used": false,
+    "fallback_attempted": false,
+    "fallback_succeeded": false,
+    "primary_provider": "qwen_image",
+    "fallback_provider": null
+  },
+  "optimization": {
+    "quick_wins": [
+      {
+        "priority": "high",
+        "recommendation": "Increase budget on CAMP003 by 15-20%.",
+        "reason": "It is the strongest ROAS campaign in the current dataset."
+      },
+      {
+        "priority": "high",
+        "recommendation": "Reduce spend on CAMP001 until fresh creative is tested.",
+        "reason": "Some campaigns are spending budget without matching conversion efficiency."
+      }
+    ],
+    "strategic_changes": [
+      {
+        "priority": "medium",
+        "recommendation": "Tighten audience targeting and remove low-intent segments.",
+        "reason": "CPA is elevated relative to the current conversion efficiency."
+      },
+      {
+        "priority": "medium",
+        "recommendation": "Create a second creative focused on time savings for SMEs.",
+        "reason": "The brand is positioned as a practical operator, so a time-savings angle is more aligned than hype-heavy messaging."
+      }
+    ],
+    "ab_tests": [
+      "Test benefit-focused headline vs. automation-focused headline.",
+      "Test dashboard visual vs. team-at-work visual."
+    ]
+  },
+  "compliance": {
+    "approved": false,
+    "issues": [
+      "Overstated marketing phrase detected: 'boost roi'."
+    ],
+    "suggested_fixes": [
+      "Remove unsupported promises and keep the message grounded in product capabilities."
+    ],
+    "final_safe_version": {
+      "headline": "Streamline Your Campaigns with AI-Powered Precision",
+      "caption": "Agentic OneBotAds reduces operational friction by combining reporting, creative generation, and budget recommendations into one AI-assisted workflow. Save time, improve campaign efficiency, and focus on what matters."
+    }
+  },
+  "publication": {
+    "platform": "Instagram",
+    "headline": "Streamline Your Campaigns with AI-Powered Precision",
+    "caption": "Agentic OneBotAds reduces operational friction by combining reporting, creative generation, and budget recommendations into one AI-assisted workflow. Save time, improve campaign efficiency, and focus on what matters.",
+    "cta": "Learn more",
+    "hashtags": [
+      "#MarketingTools",
+      "#AIAdvertising",
+      "#SMEMarketing",
+      "#CampaignOptimization"
+    ],
+    "image_prompt": "Clean professional SaaS marketing background for an AI advertising assistant, Agentic OneBotAds for SMEs and marketing teams, Instagram publication format, abstract dashboard shapes, business productivity mood, blue and white modern tech aesthetic, soft gradients, clean composition, empty space for text overlay, high quality, no text, no words, no letters, no logos, no watermark, no fake UI labels, no readable dashboard text",
+    "image_path": null,
+    "image_url": null,
+    "alt_text": "Clean professional marketing background for Agentic OneBotAds.",
+    "recommended_schedule": "Weekday lunch hour",
+    "compliance_status": "needs_revision",
+    "optimization_notes": [
+      "Increase budget on CAMP003 by 15-20%.",
+      "Reduce spend on CAMP001 until fresh creative is tested.",
+      "Tighten audience targeting and remove low-intent segments."
+    ],
+    "status": "needs_revision"
+  },
+  "report": {
+    "executive_summary": "The account is currently led by CAMP003 while CAMP001 needs attention.",
+    "kpi_overview": {
+      "CTR": "3.96%",
+      "Conversion Rate": "8.48%",
+      "CPA": "20.22",
+      "ROAS": "3.53",
+      "ROI": "252.78%"
+    },
+    "best_performing_campaign": "CAMP003",
+    "weakest_campaign": "CAMP001",
+    "key_insights": [
+      "LinkedIn SMEs is the strongest revenue-efficient segment.",
+      "Improve the weakest campaign with a sharper, benefit-led hook."
+    ],
+    "recommended_actions": [
+      "Increase budget on CAMP003 by 15-20%.",
+      "Reduce spend on CAMP001 until fresh creative is tested.",
+      "Tighten audience targeting and remove low-intent segments.",
+      "Create a second creative focused on time savings for SMEs."
+    ],
+    "next_experiments": [
+      "Test benefit-focused headline vs. automation-focused headline.",
+      "Test dashboard visual vs. team-at-work visual."
+    ],
+    "report_path": "outputs\\reports\\campaign_report_20260423_185556.md"
+  },
+  "saved_output_path": "C:\\Users\\User\\Agentic OneBotAds\\Agentic-OneBotAds\\outputs\\posts\\20260423_185556_product_hello_kitty_platform_instagram_tone_profes.json",
+  "artifact_paths": [
+    "outputs\\reports\\campaign_report_20260423_185556.md",
+    "C:\\Users\\User\\Agentic OneBotAds\\Agentic-OneBotAds\\outputs\\posts\\20260423_185556_product_hello_kitty_platform_instagram_tone_profes.json"
+  ],
+  "status": "needs_revision"
+}

@@ -25,17 +25,17 @@ def build_publication_background_prompt(
     platform: str,
 ) -> dict[str, str]:
     prompt = (
-        "Clean professional SaaS marketing background for an AI advertising assistant, "
-        f"{product_name} for {audience}, {platform} publication format, abstract dashboard "
-        "shapes, business productivity mood, blue and white modern tech aesthetic, soft "
-        "gradients, clean composition, empty space for text overlay, high quality, no text, "
-        "no words, no letters, no logos, no watermark, no fake UI labels, "
-        "no readable dashboard text"
+        "Create a brand-safe campaign visual background for "
+        f"{product_name}, aimed at {audience}, optimized for {platform} publication format. "
+        "Use a polished commercial advertising style, strong focal subject cues, clean "
+        "composition, premium lighting, soft depth, negative space for text overlay, "
+        "high quality, no text, no words, no letters, no logos, no watermark, no fake UI, "
+        "no readable labels."
     )
     return {
         "prompt": prompt,
         "negative_prompt": DEFAULT_NEGATIVE_PROMPT,
-        "alt_text": f"Clean professional marketing background for {product_name}.",
+        "alt_text": f"Campaign visual background for {product_name}.",
     }
 
 

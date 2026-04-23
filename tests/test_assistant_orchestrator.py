@@ -6,7 +6,7 @@ from onebot_ads.services.campaign_service import CampaignService
 
 
 class StubKnowledgeBase:
-    def retrieve(self, query: str, top_k: int = 3) -> list[ContextSnippet]:
+    def retrieve(self, query: str, top_k: int = 3, scope=None) -> list[ContextSnippet]:
         return [
             ContextSnippet(
                 source="brand_guidelines.md",

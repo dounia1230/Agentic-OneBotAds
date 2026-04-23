@@ -20,7 +20,7 @@ def create_app() -> FastAPI:
             "Runtime image config: enabled=%s provider=%s model=%s",
             settings.enable_image_generation,
             settings.image_provider,
-            settings.qwen_image_space_id,
+            settings.image_model_id,
         )
         yield
 

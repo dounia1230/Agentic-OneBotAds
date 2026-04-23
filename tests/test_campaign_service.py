@@ -10,7 +10,7 @@ from onebot_ads.services.campaign_service import CampaignService
 
 
 class StubKnowledgeBase:
-    def retrieve(self, query: str, top_k: int = 3) -> list[ContextSnippet]:
+    def retrieve(self, query: str, top_k: int = 3, scope=None) -> list[ContextSnippet]:
         return [
             ContextSnippet(
                 source="example_brand_playbook.md",
@@ -142,7 +142,7 @@ def test_campaign_service_prompt_only_does_not_call_image_generation(monkeypatch
 
 def test_campaign_service_draft_warns_when_rag_query_returns_no_context() -> None:
     class EmptyKnowledgeBase:
-        def retrieve(self, query: str, top_k: int = 3) -> list[ContextSnippet]:
+        def retrieve(self, query: str, top_k: int = 3, scope=None) -> list[ContextSnippet]:
             return []
 
         def reindex(self):

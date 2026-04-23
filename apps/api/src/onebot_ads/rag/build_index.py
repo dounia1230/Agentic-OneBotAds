@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from onebot_ads.core.config import get_settings
+from onebot_ads.rag.metadata import build_knowledge_file_metadata, normalize_scope_value
 
 
 def build_rag_index():
@@ -29,7 +30,16 @@ def build_rag_index():
         base_url=settings.ollama_base_url,
     )
 
-    documents = SimpleDirectoryReader(str(knowledge_path), recursive=True).load_data()
+    default_brand_slug = normalize_scope_value(settings.app_name) or "default_brand"
+    documents = SimpleDirectoryReader(
+        str(knowledge_path),
+        recursive=True,
+        file_metadata=lambda file_path: build_knowledge_file_metadata(
+            file_path,
+            root_directory=knowledge_path,
+            default_brand_slug=default_brand_slug,
+        ),
+    ).load_data()
 
     chroma_client = PersistentClient(path=str(settings.chroma_path))
     chroma_collection = chroma_client.get_or_create_collection(settings.chroma_collection)

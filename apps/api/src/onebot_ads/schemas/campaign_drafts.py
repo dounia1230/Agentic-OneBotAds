@@ -1,7 +1,11 @@
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
+from onebot_ads.schemas.knowledge import KnowledgeScope
+
 
 class CampaignBrief(BaseModel):
+    brand_name: str | None = Field(default=None, max_length=120)
+    campaign_name: str | None = Field(default=None, max_length=120)
     product_name: str = Field(min_length=2, max_length=120)
     audience: str = Field(min_length=3, max_length=240)
     goal: str = Field(min_length=3, max_length=240)
@@ -12,6 +16,7 @@ class CampaignBrief(BaseModel):
     brand_constraints: list[str] = Field(default_factory=list)
     landing_page_url: HttpUrl | None = None
     source_context_query: str | None = Field(default=None, max_length=240)
+    knowledge_scope: KnowledgeScope | None = None
     generate_image_prompt: bool = True
     generate_image: bool = False
     compose_publication_image: bool = False
@@ -26,7 +31,8 @@ class CampaignBrief(BaseModel):
     @field_validator("image_provider")
     @classmethod
     def normalize_image_provider(cls, value: str | None) -> str:
-        return "qwen_image"
+        normalized = (value or "qwen_image").strip().lower()
+        return normalized or "qwen_image"
 
 
 class ContextSnippet(BaseModel):

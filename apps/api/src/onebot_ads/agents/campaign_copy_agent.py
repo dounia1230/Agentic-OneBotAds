@@ -14,6 +14,7 @@ from onebot_ads.schemas.campaigns import (
     ContextSnippet,
     ImagePrompt,
 )
+from onebot_ads.schemas.knowledge import KnowledgeScope
 from onebot_ads.tools.channel_guidance import build_channel_guidance, build_default_cta
 from onebot_ads.tools.image_composer import compose_publication_image
 from onebot_ads.tools.image_tools import (
@@ -94,7 +95,13 @@ class CampaignCopyAgent:
             for part in [brief.product_name, brief.audience, brief.goal, brief.offer or ""]
             if part.strip()
         )
-        return self.knowledge_base.retrieve(query=query, top_k=3)
+        scope = brief.knowledge_scope
+        if scope is None and (brief.brand_name or brief.campaign_name or brief.product_name):
+            scope = KnowledgeScope(
+                brand_name=brief.brand_name or brief.product_name,
+                campaign_name=brief.campaign_name,
+            )
+        return self.knowledge_base.retrieve(query=query, top_k=3, scope=scope)
 
     def _draft_with_live_llm(
         self,

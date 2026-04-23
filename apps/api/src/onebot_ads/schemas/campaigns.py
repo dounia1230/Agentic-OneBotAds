@@ -22,6 +22,7 @@ from onebot_ads.schemas.campaign_drafts import (
     ContextSnippet,
     ImagePrompt,
 )
+from onebot_ads.schemas.knowledge import KnowledgeScope
 from onebot_ads.schemas.runtime import HealthResponse, ReindexResponse, RuntimeSummary
 
 __all__ = [
@@ -40,6 +41,7 @@ __all__ = [
     "HealthResponse",
     "ImageGenerationResponse",
     "ImagePrompt",
+    "KnowledgeScope",
     "OptimizationItem",
     "OptimizationResponse",
     "OrchestrationPlan",

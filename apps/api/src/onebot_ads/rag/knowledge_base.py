@@ -1,5 +1,11 @@
 from onebot_ads.core.config import Settings
+from onebot_ads.rag.metadata import (
+    build_knowledge_file_metadata,
+    build_retrieval_filters,
+    normalize_scope_value,
+)
 from onebot_ads.schemas.campaigns import ContextSnippet, ReindexResponse
+from onebot_ads.schemas.knowledge import KnowledgeScope
 
 
 class KnowledgeBaseService:
@@ -24,7 +30,12 @@ class KnowledgeBaseService:
                 notes=[f"RAG reindex failed: {exc}"],
             )
 
-    def retrieve(self, query: str, top_k: int = 3) -> list[ContextSnippet]:
+    def retrieve(
+        self,
+        query: str,
+        top_k: int = 3,
+        scope: KnowledgeScope | None = None,
+    ) -> list[ContextSnippet]:
         if not query.strip():
             return []
 
@@ -35,7 +46,10 @@ class KnowledgeBaseService:
 
             # Use the retriever directly so snippet lookup does not depend on
             # an LLM-backed response synthesizer.
-            retriever = index.as_retriever(similarity_top_k=top_k)
+            retriever = index.as_retriever(
+                similarity_top_k=top_k,
+                filters=build_retrieval_filters(scope),
+            )
             source_nodes = retriever.retrieve(query)
             snippets: list[ContextSnippet] = []
             for source in source_nodes:
@@ -66,10 +80,16 @@ class KnowledgeBaseService:
         if not any(input_dir.iterdir()):
             return []
 
+        default_brand_slug = normalize_scope_value(self.settings.app_name) or "default_brand"
         reader = SimpleDirectoryReader(
             input_dir=str(input_dir),
             recursive=True,
             filename_as_id=True,
+            file_metadata=lambda file_path: build_knowledge_file_metadata(
+                file_path,
+                root_directory=input_dir,
+                default_brand_slug=default_brand_slug,
+            ),
         )
         return reader.load_data()
 

@@ -105,11 +105,7 @@ class OptimizationStrategyAgent:
             OptimizationItem(
                 priority="medium",
                 recommendation="Create a second creative focused on time savings for SMEs.",
-                reason=(
-                    rag_context.answer
-                    if rag_context
-                    else "SME-oriented efficiency messaging fits the current product positioning."
-                ),
+                reason=self._build_creative_reason(rag_context),
             )
         )
 
@@ -118,3 +114,21 @@ class OptimizationStrategyAgent:
             strategic_changes=strategic_changes,
             ab_tests=ab_tests,
         )
+
+    @staticmethod
+    def _build_creative_reason(rag_context: RAGAgentResponse | None) -> str:
+        if rag_context is None:
+            return "SME-oriented efficiency messaging fits the current product positioning."
+
+        answer = rag_context.answer.lower()
+        if "practical ai-assisted marketing and ads operator" in answer:
+            return (
+                "The brand is positioned as a practical operator, so a time-savings angle is "
+                "more aligned than hype-heavy messaging."
+            )
+        if "short sentences" in answer or "concrete outcomes" in answer:
+            return (
+                "Brand guidance favors concrete, operational benefits, and time-savings is a "
+                "clear SME-friendly message."
+            )
+        return "SME-oriented efficiency messaging fits the current product positioning."

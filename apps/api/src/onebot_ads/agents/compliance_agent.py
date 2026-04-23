@@ -45,6 +45,13 @@ PROHIBITED_PHRASES = [
     "no risk",
     "instant results",
 ]
+CAUTIONARY_PHRASES = {
+    "transform your marketing strategy": "improve your marketing workflow",
+    "measurable, scalable results": "clear, reviewable recommendations",
+    "boost roi": "improve campaign efficiency",
+    "ai-driven precision": "practical AI-assisted support",
+    "perfected": "improved",
+}
 UNSUPPORTED_REGEX_PATTERNS = [
     (
         r"\b\d+%\s+(higher|faster|more)\b",
@@ -78,9 +85,26 @@ class BrandSafetyComplianceAgent:
                 issues.append(f"Unsupported or exaggerated claim detected: '{phrase}'.")
                 caption = caption.replace(phrase, "stronger campaign outcomes")
 
+        for phrase, replacement in CAUTIONARY_PHRASES.items():
+            if phrase in haystack:
+                issues.append(f"Overstated marketing phrase detected: '{phrase}'.")
+                headline = re.sub(phrase, replacement, headline, flags=re.IGNORECASE)
+                caption = re.sub(phrase, replacement, caption, flags=re.IGNORECASE)
+
         for pattern, message in UNSUPPORTED_REGEX_PATTERNS:
             if re.search(pattern, haystack, flags=re.IGNORECASE):
-                issues.append(message)
+                issues.append(f"Unsupported quantified claim detected: '{pattern}'.")
+
+        if "results" in haystack and "reviewable" not in haystack:
+            issues.append(
+                "Results language is too strong without proof; keep the message focused on workflow support."
+            )
+            caption = re.sub(
+                r"\bresults\b",
+                "recommendations",
+                caption,
+                flags=re.IGNORECASE,
+            )
 
         if rag_context and (
             "does not contain enough grounded information" in rag_context.answer.lower()
@@ -104,6 +128,8 @@ class BrandSafetyComplianceAgent:
                 "Remove unsupported promises and keep the message grounded "
                 "in product capabilities."
             )
+            headline = self._normalize_copy(headline)
+            caption = self._normalize_copy(caption)
 
         return ComplianceReviewResponse(
             approved=not issues,
@@ -114,3 +140,9 @@ class BrandSafetyComplianceAgent:
                 caption=caption,
             ),
         )
+
+    @staticmethod
+    def _normalize_copy(text: str) -> str:
+        normalized = re.sub(r"\s+", " ", text).strip()
+        normalized = normalized.replace("  ", " ")
+        return normalized

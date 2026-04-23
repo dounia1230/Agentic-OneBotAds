@@ -6,6 +6,7 @@ from onebot_ads.agents._llm import build_chat_model, extract_json_payload
 from onebot_ads.core.config import Settings
 from onebot_ads.rag.knowledge_base import KnowledgeBaseService
 from onebot_ads.schemas.campaigns import RAGAgentResponse
+from onebot_ads.schemas.knowledge import KnowledgeScope
 
 SYSTEM_PROMPT = """
 You are the RAG Marketing Knowledge Agent of Agentic OneBotAds.
@@ -43,8 +44,12 @@ class RAGMarketingKnowledgeAgent:
         self.settings = settings
         self.knowledge_base = knowledge_base
 
-    def run(self, question: str) -> RAGAgentResponse:
-        snippets = self.knowledge_base.retrieve(question, top_k=4)
+    def run(
+        self,
+        question: str,
+        knowledge_scope: KnowledgeScope | None = None,
+    ) -> RAGAgentResponse:
+        snippets = self.knowledge_base.retrieve(question, top_k=4, scope=knowledge_scope)
         if not snippets:
             return RAGAgentResponse(
                 answer=(

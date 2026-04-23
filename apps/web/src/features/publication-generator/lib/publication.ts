@@ -1,9 +1,4 @@
-import { PLATFORM_TO_CHANNEL } from "../../../lib/platforms";
-import type {
-  AssistantResponse,
-  CampaignBriefPayload,
-  PublicationPackage,
-} from "../../../types/api";
+import type { AssistantResponse, PublicationPackage } from "../../../types/api";
 
 export type PublicationFormValues = {
   productName: string;
@@ -40,20 +35,6 @@ export function buildPublicationRequestMessage(form: PublicationFormValues): str
     `Goal: ${form.goal}.`,
     form.generateImage ? "Include an image concept and visual guidance." : "Text-only output is fine.",
   ].join(" ");
-}
-
-export function buildCampaignDraftPayload(form: PublicationFormValues): CampaignBriefPayload {
-  return {
-    product_name: form.productName,
-    audience: form.audience,
-    goal: form.goal,
-    channels: [PLATFORM_TO_CHANNEL[form.platform] ?? "linkedin"],
-    tone: "professional, modern, direct",
-    key_points: ["Platform-ready publication", "Grounded positioning", "Reviewable output"],
-    brand_constraints: ["Avoid unsupported claims", "Keep the copy concrete"],
-    source_context_query: `${form.productName} positioning for ${form.audience}`,
-    generate_image_prompt: form.generateImage,
-  };
 }
 
 export function derivePublicationOutput(

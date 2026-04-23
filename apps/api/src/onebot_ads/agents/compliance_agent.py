@@ -46,8 +46,14 @@ PROHIBITED_PHRASES = [
     "instant results",
 ]
 UNSUPPORTED_REGEX_PATTERNS = [
-    r"\b\d+%\s+(higher|faster|more)\b",
-    r"\bsaving\s+\d+\+?\s+hours\b",
+    (
+        r"\b\d+%\s+(higher|faster|more)\b",
+        "Avoid specific percentage improvement claims unless they are supported by evidence.",
+    ),
+    (
+        r"\bsaving\s+\d+\+?\s+hours\b",
+        "Avoid specific time-saving claims unless they are supported by evidence.",
+    ),
 ]
 
 
@@ -72,9 +78,9 @@ class BrandSafetyComplianceAgent:
                 issues.append(f"Unsupported or exaggerated claim detected: '{phrase}'.")
                 caption = caption.replace(phrase, "stronger campaign outcomes")
 
-        for pattern in UNSUPPORTED_REGEX_PATTERNS:
+        for pattern, message in UNSUPPORTED_REGEX_PATTERNS:
             if re.search(pattern, haystack, flags=re.IGNORECASE):
-                issues.append(f"Unsupported quantified claim detected: '{pattern}'.")
+                issues.append(message)
 
         if rag_context and (
             "does not contain enough grounded information" in rag_context.answer.lower()

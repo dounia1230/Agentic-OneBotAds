@@ -3,10 +3,9 @@ import { ChangeEvent, FormEvent, useRef, useState } from "react";
 import { SectionIntro } from "../../../components/ui/SectionIntro";
 import { useScrollIntoViewOnChange } from "../../../hooks/useScrollIntoViewOnChange";
 import { PLATFORM_OPTIONS } from "../../../lib/platforms";
-import { createCampaignDraft, runAssistant } from "../../../services/api/onebot";
+import { runAssistant } from "../../../services/api/onebot";
 import type { PublicationPackage } from "../../../types/api";
 import {
-  buildCampaignDraftPayload,
   buildPublicationRequestMessage,
   defaultPublicationForm,
   derivePublicationOutput,
@@ -40,12 +39,86 @@ function sanitizeFileName(value: string): string {
   return normalized.replace(/^-+|-+$/g, "") || "publication-report";
 }
 
+function normalizePdfText(value: string): string {
+  return value
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/[–—]/g, "-")
+    .replace(/\u2026/g, "...")
+    .replace(/[^\x20-\x7E\n]/g, " ");
+}
+
+function escapePdfText(value: string): string {
+  return normalizePdfText(value)
+    .replace(/\\/g, "\\\\")
+    .replace(/\(/g, "\\(")
+    .replace(/\)/g, "\\)");
+}
+
+function wrapPdfText(text: string, maxChars: number): string[] {
+  const paragraphs = normalizePdfText(text).split("\n");
+  const lines: string[] = [];
+
+  for (const paragraph of paragraphs) {
+    const trimmed = paragraph.trim();
+    if (!trimmed) {
+      lines.push("");
+      continue;
+    }
+
+    const words = trimmed.split(/\s+/);
+    let currentLine = "";
+
+    for (const word of words) {
+      const candidate = currentLine ? `${currentLine} ${word}` : word;
+      if (candidate.length <= maxChars) {
+        currentLine = candidate;
+        continue;
+      }
+
+      if (currentLine) {
+        lines.push(currentLine);
+      }
+
+      if (word.length <= maxChars) {
+        currentLine = word;
+        continue;
+      }
+
+      let start = 0;
+      while (start < word.length) {
+        const chunk = word.slice(start, start + maxChars);
+        if (chunk.length === maxChars) {
+          lines.push(chunk);
+        } else {
+          currentLine = chunk;
+        }
+        start += maxChars;
+      }
+    }
+
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+  }
+
+  return lines;
+}
+
 type PublicationReportContent = {
   form: PublicationFormValues;
   publication: PublicationPackage;
   reviewNotes: string[];
-  draftWarnings: string[];
   complianceIssues: string[];
+};
+
+type PdfLineSpec = {
+  text: string;
+  font: "F1" | "F2";
+  size: number;
+  leading: number;
+  color: [number, number, number];
+  gapBefore?: number;
 };
 
 function renderReportListHtml(items: string[]): string {
@@ -60,7 +133,6 @@ function buildPublicationReportPlainText({
   form,
   publication,
   reviewNotes,
-  draftWarnings,
   complianceIssues,
 }: PublicationReportContent): string {
   const lines = [
@@ -106,10 +178,6 @@ function buildPublicationReportPlainText({
     lines.push("Review the copy against the campaign goal, audience fit, and platform tone before scheduling.");
   }
 
-  if (draftWarnings.length > 0) {
-    lines.push("", "Backend Notes", ...draftWarnings.map((warning) => `- ${warning}`));
-  }
-
   if (complianceIssues.length > 0) {
     lines.push("", "Compliance Notes", ...complianceIssues.map((issue) => `- ${issue}`));
   }
@@ -121,7 +189,6 @@ function buildPublicationReportHtml({
   form,
   publication,
   reviewNotes,
-  draftWarnings,
   complianceIssues,
 }: PublicationReportContent): string {
   const optimizationNotes =
@@ -162,16 +229,6 @@ function buildPublicationReportHtml({
           <p class="eyebrow">Review Recommended</p>
           <h2>Publication available with revision notes</h2>
           ${renderReportListHtml(reviewNotes)}
-        </section>
-      `
-      : "";
-
-  const backendNotes =
-    draftWarnings.length > 0
-      ? `
-        <section>
-          <p class="eyebrow">Backend Notes</p>
-          ${renderReportListHtml(draftWarnings)}
         </section>
       `
       : "";
@@ -220,7 +277,6 @@ function buildPublicationReportHtml({
         <h2>Recommendations</h2>
         ${optimizationNotes}
       </section>
-      ${backendNotes}
       ${complianceNotes}
     </article>
   `;
@@ -341,12 +397,165 @@ function buildPublicationReportDocument(content: PublicationReportContent): { ht
   };
 }
 
+function buildPdfLineSpecs(content: PublicationReportContent): PdfLineSpec[] {
+  const { form, publication, reviewNotes, complianceIssues } = content;
+  const lines: PdfLineSpec[] = [
+    { text: "Publication Draft", font: "F2", size: 11, leading: 14, color: [0.43, 0.3, 1] },
+    { text: publication.headline, font: "F2", size: 24, leading: 30, color: [0.06, 0.09, 0.16], gapBefore: 6 },
+    { text: `${publication.platform} post for ${form.audience}`, font: "F1", size: 12, leading: 17, color: [0.32, 0.38, 0.47], gapBefore: 4 },
+    { text: `Platform: ${publication.platform}`, font: "F1", size: 11, leading: 15, color: [0.06, 0.09, 0.16], gapBefore: 12 },
+    { text: `Goal: ${form.goal}`, font: "F1", size: 11, leading: 15, color: [0.06, 0.09, 0.16] },
+    { text: `Recommended Time: ${publication.recommended_schedule}`, font: "F1", size: 11, leading: 15, color: [0.06, 0.09, 0.16] },
+  ];
+
+  if (reviewNotes.length > 0) {
+    lines.push({ text: "Review Recommended", font: "F2", size: 16, leading: 21, color: [0.06, 0.09, 0.16], gapBefore: 18 });
+    for (const note of reviewNotes) {
+      lines.push({ text: `- ${note}`, font: "F1", size: 11, leading: 16, color: [0.06, 0.09, 0.16] });
+    }
+  }
+
+  lines.push(
+    { text: "Ready-to-publish copy", font: "F2", size: 16, leading: 21, color: [0.06, 0.09, 0.16], gapBefore: 18 },
+    { text: publication.headline, font: "F2", size: 18, leading: 23, color: [0.06, 0.09, 0.16], gapBefore: 4 },
+    { text: publication.caption, font: "F1", size: 11, leading: 17, color: [0.06, 0.09, 0.16], gapBefore: 6 },
+    { text: `CTA: ${publication.cta}`, font: "F2", size: 11, leading: 16, color: [0.37, 0.56, 0.87], gapBefore: 6 },
+    { text: `Hashtags: ${publication.hashtags.join(" ")}`, font: "F1", size: 11, leading: 16, color: [0.32, 0.38, 0.47] },
+  );
+
+  if (form.generateImage) {
+    lines.push(
+      { text: "Creative Brief", font: "F2", size: 16, leading: 21, color: [0.06, 0.09, 0.16], gapBefore: 18 },
+      { text: `Image Prompt: ${publication.image_prompt ?? "Not provided."}`, font: "F1", size: 11, leading: 16, color: [0.06, 0.09, 0.16] },
+      { text: `Alt Text: ${publication.alt_text ?? "Not provided."}`, font: "F1", size: 11, leading: 16, color: [0.06, 0.09, 0.16] },
+      {
+        text: `Asset Status: ${publication.image_path ? `Image file: ${publication.image_path}` : "Design asset pending; use the prompt above for production."}`,
+        font: "F1",
+        size: 11,
+        leading: 16,
+        color: [0.06, 0.09, 0.16],
+      },
+    );
+  }
+
+  lines.push({ text: "Recommendations", font: "F2", size: 16, leading: 21, color: [0.06, 0.09, 0.16], gapBefore: 18 });
+
+  if (publication.optimization_notes.length > 0) {
+    for (const note of publication.optimization_notes) {
+      lines.push({ text: `- ${note}`, font: "F1", size: 11, leading: 16, color: [0.06, 0.09, 0.16] });
+    }
+  } else {
+    lines.push({
+      text: "Review the copy against the campaign goal, audience fit, and platform tone before scheduling.",
+      font: "F1",
+      size: 11,
+      leading: 16,
+      color: [0.06, 0.09, 0.16],
+    });
+  }
+
+  if (complianceIssues.length > 0) {
+    lines.push({ text: "Compliance Notes", font: "F2", size: 16, leading: 21, color: [0.06, 0.09, 0.16], gapBefore: 18 });
+    for (const issue of complianceIssues) {
+      lines.push({ text: `- ${issue}`, font: "F1", size: 11, leading: 16, color: [0.06, 0.09, 0.16] });
+    }
+  }
+
+  return lines;
+}
+
+function buildPublicationPdfBlob(content: PublicationReportContent): Blob {
+  const pageWidth = 595;
+  const pageHeight = 842;
+  const marginX = 56;
+  const marginTop = 60;
+  const marginBottom = 60;
+  const contentWidth = pageWidth - marginX * 2;
+
+  const pages: string[][] = [[]];
+  let currentPage = pages[0];
+  let y = pageHeight - marginTop;
+
+  const maxCharsForSize = (size: number) =>
+    Math.max(24, Math.floor(contentWidth / Math.max(5.6, size * 0.54)));
+
+  for (const spec of buildPdfLineSpecs(content)) {
+    if (spec.gapBefore) {
+      y -= spec.gapBefore;
+    }
+
+    const wrappedLines = wrapPdfText(spec.text, maxCharsForSize(spec.size));
+
+    for (const line of wrappedLines) {
+      if (y - spec.leading < marginBottom) {
+        currentPage = [];
+        pages.push(currentPage);
+        y = pageHeight - marginTop;
+      }
+
+      if (line) {
+        currentPage.push(
+          `BT /${spec.font} ${spec.size} Tf ${spec.color[0]} ${spec.color[1]} ${spec.color[2]} rg 1 0 0 1 ${marginX} ${y} Tm (${escapePdfText(line)}) Tj ET`,
+        );
+      }
+
+      y -= spec.leading;
+    }
+  }
+
+  const objects: string[] = [];
+  const pageObjectNumbers: number[] = [];
+
+  objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
+  objects[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
+  objects[4] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>";
+
+  let nextObjectNumber = 5;
+  for (const commands of pages) {
+    const contentObjectNumber = nextObjectNumber++;
+    const pageObjectNumber = nextObjectNumber++;
+    const stream = commands.join("\n");
+    objects[contentObjectNumber] = `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
+    objects[pageObjectNumber] =
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] ` +
+      "/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> " +
+      `/Contents ${contentObjectNumber} 0 R >>`;
+    pageObjectNumbers.push(pageObjectNumber);
+  }
+
+  objects[2] = `<< /Type /Pages /Kids [${pageObjectNumbers.map((n) => `${n} 0 R`).join(" ")}] /Count ${pageObjectNumbers.length} >>`;
+
+  let pdf = "%PDF-1.4\n";
+  const offsets: number[] = [];
+
+  for (let index = 1; index < objects.length; index += 1) {
+    const objectBody = objects[index];
+    if (!objectBody) {
+      continue;
+    }
+
+    offsets[index] = pdf.length;
+    pdf += `${index} 0 obj\n${objectBody}\nendobj\n`;
+  }
+
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length}\n`;
+  pdf += "0000000000 65535 f \n";
+
+  for (let index = 1; index < objects.length; index += 1) {
+    const offset = offsets[index] ?? 0;
+    pdf += `${offset.toString().padStart(10, "0")} 00000 n \n`;
+  }
+
+  pdf += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return new Blob([pdf], { type: "application/pdf" });
+}
+
 export function PublicationGeneratorTab() {
   const resultsRef = useRef<HTMLDivElement | null>(null);
   const [form, setForm] = useState<PublicationFormValues>(defaultPublicationForm);
   const [publication, setPublication] = useState<PublicationPackage | null>(null);
   const [reviewNotes, setReviewNotes] = useState<string[]>([]);
-  const [draftWarnings, setDraftWarnings] = useState<string[]>([]);
   const [complianceIssues, setComplianceIssues] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState("");
@@ -373,7 +582,6 @@ export function PublicationGeneratorTab() {
     }));
     setPublication(null);
     setReviewNotes([]);
-    setDraftWarnings([]);
     setComplianceIssues([]);
     setActionMessage("");
     setLastGeneratedFormSignature(null);
@@ -384,7 +592,6 @@ export function PublicationGeneratorTab() {
       form,
       publication: currentPublication,
       reviewNotes,
-      draftWarnings,
       complianceIssues,
     };
   }
@@ -423,42 +630,25 @@ export function PublicationGeneratorTab() {
       return;
     }
 
-    const reportDocument = buildPublicationReportDocument(getReportContent(publication));
-    const printWindow = window.open("", "_blank", "noopener,noreferrer");
+    const reportContent = getReportContent(publication);
+    const reportDocument = buildPublicationReportDocument(reportContent);
+    const pdfBlob = buildPublicationPdfBlob(reportContent);
+    const downloadUrl = URL.createObjectURL(pdfBlob);
+    const downloadLink = document.createElement("a");
 
-    if (!printWindow) {
-      setActionMessage("Allow pop-ups to download the report as PDF.");
-      return;
-    }
+    downloadLink.href = downloadUrl;
+    downloadLink.download = reportDocument.fileName;
+    downloadLink.style.display = "none";
 
-    printWindow.document.open();
-    printWindow.document.write(reportDocument.html);
-    printWindow.document.close();
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    downloadLink.remove();
 
-    let hasTriggeredPrint = false;
-    const runPrint = () => {
-      if (hasTriggeredPrint) {
-        return;
-      }
+    window.setTimeout(() => {
+      URL.revokeObjectURL(downloadUrl);
+    }, 1000);
 
-      hasTriggeredPrint = true;
-      printWindow.focus();
-      printWindow.print();
-    };
-
-    printWindow.addEventListener("afterprint", () => {
-      printWindow.close();
-    }, { once: true });
-
-    printWindow.addEventListener("load", () => {
-      window.setTimeout(runPrint, 120);
-    }, { once: true });
-
-    if (printWindow.document.readyState === "complete") {
-      window.setTimeout(runPrint, 120);
-    }
-
-    setActionMessage("Print dialog opened. Choose Save as PDF to download.");
+    setActionMessage("PDF download started.");
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -473,14 +663,9 @@ export function PublicationGeneratorTab() {
     setIsSubmitting(true);
     const submittedFormSignature = currentFormSignature;
 
-    const [assistantResult, draftResult] = await Promise.allSettled([
+    const [assistantResult] = await Promise.allSettled([
       runAssistant({ message: buildPublicationRequestMessage(form) }),
-      createCampaignDraft(buildCampaignDraftPayload(form)),
     ]);
-
-    const nextDraftWarnings = draftResult.status === "fulfilled" ? draftResult.value.warnings : [];
-    const draftComplianceIssues = draftResult.status === "fulfilled" ? draftResult.value.compliance_issues : [];
-    setDraftWarnings(nextDraftWarnings);
 
     if (assistantResult.status === "rejected") {
       setPublication(null);
@@ -488,16 +673,6 @@ export function PublicationGeneratorTab() {
       setComplianceIssues([]);
       setLastGeneratedFormSignature(null);
       setError(assistantResult.reason instanceof Error ? assistantResult.reason.message : "Unable to generate publication output.");
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (draftResult.status === "rejected") {
-      setPublication(null);
-      setReviewNotes([]);
-      setComplianceIssues([]);
-      setLastGeneratedFormSignature(null);
-      setError(draftResult.reason instanceof Error ? draftResult.reason.message : "Unable to validate the publication draft.");
       setIsSubmitting(false);
       return;
     }
@@ -516,7 +691,6 @@ export function PublicationGeneratorTab() {
 
     const nextComplianceIssues = assistantResult.value.compliance?.issues ?? [];
     const nextReviewNotes = [
-      ...draftComplianceIssues,
       ...nextComplianceIssues,
       form.generateImage && !isFilled(nextPublication.image_prompt ?? "")
         ? "Image guidance was requested, but no image prompt was returned."
@@ -524,7 +698,6 @@ export function PublicationGeneratorTab() {
       form.generateImage && !isFilled(nextPublication.alt_text ?? "")
         ? "Image guidance was requested, but no alt text was returned."
         : null,
-      draftResult.value.status === "needs_revision" ? "The draft response needs revision before it can be shown." : null,
       isBlockingPublicationStatus(nextPublication.status) ? `Generation status: ${formatStatusLabel(nextPublication.status)}.` : null,
       isBlockingPublicationStatus(nextPublication.compliance_status)
         ? `Compliance status: ${formatStatusLabel(nextPublication.compliance_status)}.`
@@ -689,17 +862,6 @@ export function PublicationGeneratorTab() {
               <p>Review the copy against the campaign goal, audience fit, and platform tone before scheduling.</p>
             )}
           </section>
-
-          {draftWarnings.length > 0 ? (
-            <section className="guidance-card">
-              <p className="eyebrow">Backend Notes</p>
-              <ul className="bullet-list">
-                {draftWarnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
 
           {complianceIssues.length > 0 ? (
             <section className="warning-card">

@@ -161,7 +161,32 @@ def test_campaign_service_draft_warns_when_rag_query_returns_no_context() -> Non
         )
     )
 
-    assert "RAG context was requested but no context was retrieved." in result.warnings
+    assert "Draft context query returned no snippets; fallback copy used only the brief." in result.warnings
+
+
+def test_campaign_service_reports_specific_live_llm_fallback_reason_once(monkeypatch) -> None:
+    settings = Settings(enable_live_llm=True, enable_rag=True)
+    service = CampaignService(settings, knowledge_base=StubKnowledgeBase())
+
+    def fail_live_draft(*args, **kwargs):
+        raise ValueError("Model response did not contain a JSON object.")
+
+    monkeypatch.setattr(service.campaign_agent, "_draft_with_live_llm", fail_live_draft)
+
+    result = service.draft_campaign(
+        CampaignBrief(
+            product_name="OneBot Ads",
+            audience="SME marketing teams",
+            goal="Increase qualified leads",
+            channels=["linkedin"],
+        )
+    )
+
+    assert (
+        "Live LLM draft path failed; deterministic fallback returned: "
+        "ValueError: Model response did not contain a JSON object."
+    ) in result.warnings
+    assert not any("unavailable or not provisioned" in warning for warning in result.warnings)
 
 
 def test_runtime_summary_normalizes_paths_and_exposes_image_runtime(

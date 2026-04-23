@@ -68,14 +68,19 @@ class CampaignCopyAgent:
         warnings: list[str] = []
         context = self._retrieve_context(brief)
         if brief.source_context_query and not context:
-            warnings.append("RAG context was requested but no context was retrieved.")
+            warnings.append(
+                "Draft context query returned no snippets; fallback copy used only the brief."
+            )
 
         if self.settings.enable_live_llm:
             try:
                 response = self._draft_with_live_llm(brief, context, warnings)
                 return self._finalize_draft_response(response, brief, context, warnings)
             except Exception as exc:
-                warnings.append(f"Live LLM draft path failed, fallback used: {exc}")
+                warnings.append(
+                    "Live LLM draft path failed; deterministic fallback returned: "
+                    f"{_format_exception_details(exc)}"
+                )
 
         response = self._draft_fallback(brief, context, warnings)
         return self._finalize_draft_response(response, brief, context, warnings)
@@ -249,11 +254,6 @@ class CampaignCopyAgent:
             "deterministic "
             f"fallback logic and context from {context_sources}."
         )
-        if self.settings.enable_live_llm:
-            warnings.append(
-                "Live model path unavailable or not provisioned; deterministic fallback "
-                "returned."
-            )
 
         return CampaignDraftResponse(
             provider="fallback",

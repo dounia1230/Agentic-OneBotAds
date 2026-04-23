@@ -1,33 +1,165 @@
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useLayoutEffect, useRef, useState } from "react";
 
-import { EmptyState } from "../../../components/ui/EmptyState";
-import { SectionIntro } from "../../../components/ui/SectionIntro";
 import { useScrollIntoViewOnChange } from "../../../hooks/useScrollIntoViewOnChange";
 import { runAssistant } from "../../../services/api/onebot";
 import type { AssistantResponse } from "../../../types/api";
 
-const defaultQuestion =
-  "What guidance does the knowledge base give for tone and messaging?";
+function ArrowUpIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M12 19V5" />
+      <path d="m6 11 6-6 6 6" />
+    </svg>
+  );
+}
+
+function renderKnowledgeAnswer(answer: string) {
+  const lines = answer
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  const content: Array<
+    { type: "paragraph"; text: string } | { type: "list"; items: string[] }
+  > = [];
+
+  for (const line of lines) {
+    if (/^[-*•]\s+/.test(line)) {
+      const previous = content[content.length - 1];
+      const item = line.replace(/^[-*•]\s+/, "").trim();
+      if (previous?.type === "list") {
+        previous.items.push(item);
+      } else {
+        content.push({ type: "list", items: [item] });
+      }
+      continue;
+    }
+
+    content.push({ type: "paragraph", text: line });
+  }
+
+  return content.map((block, index) =>
+    block.type === "paragraph" ? (
+      <p key={`paragraph-${index}`}>{block.text}</p>
+    ) : (
+      <ul key={`list-${index}`} className="knowledge-chat-answer-list">
+        {block.items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    ),
+  );
+}
 
 export function KnowledgeBaseTab() {
+  const composerRef = useRef<HTMLFormElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const resultsRef = useRef<HTMLDivElement | null>(null);
-  const [question, setQuestion] = useState(defaultQuestion);
+  const previousComposerRectRef = useRef<DOMRect | null>(null);
+  const previousButtonRectRef = useRef<DOMRect | null>(null);
+  const [question, setQuestion] = useState("");
+  const [submittedQuestion, setSubmittedQuestion] = useState("");
   const [response, setResponse] = useState<AssistantResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useScrollIntoViewOnChange(resultsRef, response?.rag);
+  const hasQuestion = question.trim().length > 0;
+  const hasConversationStarted =
+    isSubmitting ||
+    submittedQuestion.trim().length > 0 ||
+    Boolean(response?.rag) ||
+    Boolean(error);
+
+  useScrollIntoViewOnChange(resultsRef, response?.rag ?? error);
+
+  useLayoutEffect(() => {
+    const animateFlip = (
+      element: HTMLElement | null,
+      previousRect: DOMRect | null,
+      storeRect: { current: DOMRect | null },
+    ) => {
+      if (!element) {
+        storeRect.current = null;
+        return;
+      }
+
+      const nextRect = element.getBoundingClientRect();
+      if (previousRect) {
+        const deltaX = previousRect.left - nextRect.left;
+        const deltaY = previousRect.top - nextRect.top;
+        const scaleX = previousRect.width / Math.max(nextRect.width, 1);
+        const scaleY = previousRect.height / Math.max(nextRect.height, 1);
+
+        if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1 || Math.abs(scaleX - 1) > 0.01 || Math.abs(scaleY - 1) > 0.01) {
+          element.animate(
+            [
+              {
+                transform: `translate(${deltaX}px, ${deltaY}px) scale(${scaleX}, ${scaleY})`,
+                transformOrigin: "top left",
+              },
+              {
+                transform: "translate(0, 0) scale(1, 1)",
+                transformOrigin: "top left",
+              },
+            ],
+            {
+              duration: 420,
+              easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+            },
+          );
+        }
+      }
+
+      storeRect.current = nextRect;
+    };
+
+    animateFlip(composerRef.current, previousComposerRectRef.current, previousComposerRectRef);
+    animateFlip(buttonRef.current, previousButtonRectRef.current, previousButtonRectRef);
+  }, [hasConversationStarted, isSubmitting]);
+
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    if (!input) {
+      return;
+    }
+
+    input.style.height = "0px";
+    input.style.height = `${Math.max(input.scrollHeight, hasConversationStarted ? 58 : 88)}px`;
+  }, [question, hasConversationStarted]);
+
+  function handleQuestionKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter" || event.shiftKey) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (!hasQuestion || isSubmitting) {
+      return;
+    }
+
+    event.currentTarget.form?.requestSubmit();
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    const nextQuestion = question.trim();
+    if (!nextQuestion) {
+      return;
+    }
+
     setError(null);
+    setResponse(null);
+    setSubmittedQuestion(nextQuestion);
+    setQuestion("");
     setIsSubmitting(true);
 
     try {
-      const nextResponse = await runAssistant({ message: question });
+      const nextResponse = await runAssistant({ message: nextQuestion });
       setResponse(nextResponse);
     } catch (submitError) {
-      setResponse(null);
       setError(submitError instanceof Error ? submitError.message : "Unable to query the knowledge base.");
     } finally {
       setIsSubmitting(false);
@@ -35,75 +167,68 @@ export function KnowledgeBaseTab() {
   }
 
   return (
-    <div className="tab-layout">
-      <SectionIntro
-        eyebrow="Knowledge Base Q&A"
-        title="Ask the local RAG workflow"
-        description="Ask product, tone, audience, or campaign questions and surface the grounded answer plus source signals when the assistant can provide them."
-      />
+    <div className={`knowledge-chat ${hasConversationStarted ? "is-active" : ""}`}>
+      <div className="knowledge-chat-spacer" />
 
-      {error ? (
-        <p className="error-banner" role="alert">
-          {error}
-        </p>
-      ) : null}
+      <div className="knowledge-chat-stage">
+        <div className="knowledge-chat-shell">
+          <header className={`knowledge-chat-header ${hasConversationStarted ? "is-hidden" : ""}`}>
+            <p className="eyebrow">Knowledge Base Q&A</p>
+            <h2>Ask the local RAG workflow</h2>
+          </header>
 
-      <form className="brief-form" onSubmit={handleSubmit}>
-        <label>
-          Question
-          <textarea value={question} onChange={(event) => setQuestion(event.target.value)} rows={6} />
-        </label>
+          {submittedQuestion || response?.rag || error ? (
+            <div ref={resultsRef} className="knowledge-chat-results">
+              {submittedQuestion ? (
+                <article className="knowledge-chat-message knowledge-chat-message-user">
+                  <p>{submittedQuestion}</p>
+                </article>
+              ) : null}
 
-        <div className="form-actions">
-          <button className="primary-action" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Asking..." : "Ask"}
+              {error ? (
+                <article className="knowledge-chat-error" role="alert">
+                  <p>{error}</p>
+                </article>
+              ) : null}
+
+              {response?.rag ? (
+                <article className="knowledge-chat-answer-block">
+                  <div className="knowledge-chat-answer">{renderKnowledgeAnswer(response.rag.answer)}</div>
+                </article>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+
+        <form
+          ref={composerRef}
+          className={`knowledge-chat-composer ${hasConversationStarted ? "is-compact" : ""}`}
+          onSubmit={handleSubmit}
+        >
+          <textarea
+            ref={inputRef}
+            className="knowledge-chat-input"
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+            onKeyDown={handleQuestionKeyDown}
+            rows={1}
+            placeholder="Question"
+            aria-label="Question"
+          />
+
+          <button
+            ref={buttonRef}
+            className={`knowledge-chat-submit ${hasConversationStarted ? "is-compact" : ""}`}
+            type="submit"
+            disabled={!hasQuestion || isSubmitting}
+            aria-busy={isSubmitting}
+            aria-label={isSubmitting ? "Asking" : hasConversationStarted ? "Ask question" : "Ask"}
+          >
+            {isSubmitting ? <span className="button-spinner" aria-hidden="true" /> : hasConversationStarted ? <ArrowUpIcon /> : null}
+            <span className="knowledge-chat-submit-label">{isSubmitting ? "Asking..." : "Ask"}</span>
           </button>
-        </div>
-      </form>
-
-      {response?.rag ? (
-        <div ref={resultsRef} className="result-stack">
-          <article className="detail-card">
-            <p className="eyebrow">Answer</p>
-            <p>{response.rag.answer}</p>
-          </article>
-
-          <div className="structured-grid">
-            <article className="detail-card">
-              <p className="eyebrow">Confidence</p>
-              <h3>{response.rag.confidence}</h3>
-            </article>
-
-            <article className="detail-card">
-              <p className="eyebrow">Intent</p>
-              <h3>{response.intent}</h3>
-            </article>
-
-            <article className="detail-card span-two">
-              <p className="eyebrow">Relevant Context</p>
-              <ul className="bullet-list">
-                {response.rag.relevant_context.map((snippet) => (
-                  <li key={snippet}>{snippet}</li>
-                ))}
-              </ul>
-            </article>
-
-            <article className="detail-card span-two">
-              <p className="eyebrow">Source Documents</p>
-              <ul className="bullet-list">
-                {response.rag.source_documents.map((document) => (
-                  <li key={document}>{document}</li>
-                ))}
-              </ul>
-            </article>
-          </div>
-        </div>
-      ) : (
-        <EmptyState
-          title="No answer yet"
-          description="Ask a question about messaging, positioning, offers, or prior knowledge-base content."
-        />
-      )}
+        </form>
+      </div>
     </div>
   );
 }

@@ -1,14 +1,136 @@
 .app-shell {
-  width: min(1480px, calc(100% - 32px));
-  margin: 0 auto;
-  padding: 28px 0 48px;
+  --sidebar-width: 280px;
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  width: 100%;
+  min-height: 100svh;
+  margin: 0;
+  padding: 0;
+  transition: grid-template-columns 280ms ease-in-out;
+}
+
+.app-shell.is-sidebar-collapsed {
+  --sidebar-width: 76px;
+}
+
+.app-sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  height: 100svh;
+  padding: 20px 14px;
+  border-right: 1px solid var(--line);
+  background: rgba(8, 13, 24, 0.88);
+  backdrop-filter: blur(18px);
+  overflow: hidden;
+}
+
+.sidebar-brand {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.sidebar-logo {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(149, 199, 255, 0.28);
+  background: rgba(149, 199, 255, 0.16);
+  color: var(--accent);
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.2);
+}
+
+.sidebar-brand-name {
+  overflow: hidden;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  white-space: nowrap;
+  opacity: 1;
+  transform: translateX(0);
+  transition:
+    opacity 180ms ease-in-out,
+    transform 220ms ease-in-out;
+}
+
+.is-sidebar-collapsed .sidebar-brand-name {
+  opacity: 0;
+  transform: translateX(-8px);
+}
+
+.sidebar-toggle {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  margin-top: auto;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.sidebar-toggle:hover,
+.sidebar-toggle:focus-visible {
+  background: rgba(149, 199, 255, 0.08);
+  color: var(--ink);
+  outline: none;
+}
+
+.sidebar-toggle-icon {
+  width: 20px;
+  height: 20px;
+  justify-self: center;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  transition: transform 280ms ease-in-out;
+}
+
+.is-sidebar-collapsed .sidebar-toggle-icon {
+  transform: rotate(180deg);
+}
+
+.sidebar-toggle-label {
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 1;
+  transition:
+    opacity 160ms ease-in-out,
+    transform 220ms ease-in-out;
+}
+
+.is-sidebar-collapsed .sidebar-toggle-label {
+  opacity: 0;
+  transform: translateX(-8px);
 }
 
 .panel {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(157, 179, 202, 0.14);
-  border-radius: 28px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
   background: var(--panel);
   backdrop-filter: blur(18px);
   box-shadow: var(--shadow);
@@ -21,14 +143,7 @@
 }
 
 .hero::after {
-  content: "";
-  position: absolute;
-  width: 240px;
-  height: 240px;
-  right: -74px;
-  top: -90px;
-  border-radius: 999px;
-  background: radial-gradient(circle, rgba(74, 163, 255, 0.34) 0%, rgba(74, 163, 255, 0) 72%);
+  content: none;
 }
 
 .hero-copy {
@@ -45,7 +160,7 @@
 .spotlight-card h3 {
   margin: 0;
   font-family: "Space Grotesk", sans-serif;
-  line-height: 0.98;
+  line-height: 1.12;
 }
 
 .hero h1 {
@@ -60,24 +175,29 @@
 }
 
 .tab-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  justify-content: center;
-  margin: 20px 0 16px;
+  display: grid;
+  gap: 8px;
+  margin: 0;
 }
 
 .workspace {
   display: block;
+  min-width: 0;
+  padding: 34px clamp(22px, 4vw, 56px) 56px;
 }
 
 .workspace-single {
-  max-width: 1240px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
 }
 
 .composer {
   padding: 36px;
+}
+
+.workspace-panel {
+  min-width: 0;
+  animation: rise 320ms ease both;
 }
 
 .tabpanel {
@@ -90,6 +210,10 @@
   gap: 20px;
 }
 
+.result-stack {
+  scroll-margin-top: 28px;
+}
+
 .section-header {
   display: flex;
   justify-content: space-between;
@@ -98,7 +222,7 @@
 }
 
 .section-header h2 {
-  font-size: clamp(1.9rem, 2.8vw, 2.7rem);
+  font-size: clamp(1.65rem, 2.3vw, 2.25rem);
 }
 
 .section-copy {
@@ -136,8 +260,19 @@
 
 @media (max-width: 760px) {
   .app-shell {
-    width: min(100% - 20px, 100%);
-    padding-top: 20px;
+    --sidebar-width: 70px;
+  }
+
+  .app-shell:not(.is-sidebar-collapsed) {
+    --sidebar-width: 224px;
+  }
+
+  .app-sidebar {
+    padding: 16px 12px;
+  }
+
+  .workspace {
+    padding: 22px 16px 36px;
   }
 
   .hero,
@@ -168,5 +303,60 @@
 
   .span-two {
     grid-column: span 1;
+  }
+
+  .report-meta,
+  .report-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .report-section-heading {
+    flex-wrap: wrap;
+  }
+}
+
+@media print {
+  body {
+    background: #ffffff;
+    color: #101828;
+  }
+
+  body::before,
+  .app-sidebar,
+  .section-header,
+  .brief-form,
+  .error-banner {
+    display: none;
+  }
+
+  .app-shell {
+    display: block;
+    min-height: auto;
+  }
+
+  .workspace {
+    padding: 0;
+  }
+
+  .workspace-panel,
+  .result-stack {
+    animation: none;
+  }
+
+  .publication-report {
+    max-width: none;
+    padding: 0;
+    background: #ffffff;
+    color: #101828;
+    box-shadow: none;
+  }
+
+  .report-meta {
+    background: #f2f4f7;
+  }
+
+  .report-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }

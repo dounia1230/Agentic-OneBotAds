@@ -12,10 +12,11 @@ type TabNavProps = {
     label: string;
   }>;
   activeTab: WorkspaceTabId;
+  isCollapsed?: boolean;
   onChange: (tabId: WorkspaceTabId) => void;
 };
 
-export function TabNav({ tabs, activeTab, onChange }: TabNavProps) {
+export function TabNav({ tabs, activeTab, isCollapsed = false, onChange }: TabNavProps) {
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   function focusTabAt(index: number) {
@@ -54,9 +55,19 @@ export function TabNav({ tabs, activeTab, onChange }: TabNavProps) {
   }
 
   return (
-    <div className="tab-row" role="tablist" aria-label="Workspace tabs">
+    <div
+      className={`tab-row ${isCollapsed ? "is-collapsed" : ""}`}
+      role="tablist"
+      aria-label="Workspace tabs"
+      aria-orientation="vertical"
+    >
       {tabs.map((tab, index) => {
         const isActive = tab.id === activeTab;
+        const shortcut = tab.label
+          .split(" ")
+          .map((word) => word[0])
+          .join("")
+          .slice(0, 2);
 
         return (
           <button
@@ -74,7 +85,8 @@ export function TabNav({ tabs, activeTab, onChange }: TabNavProps) {
             onClick={() => onChange(tab.id)}
             onKeyDown={(event) => handleKeyDown(event, index)}
           >
-            {tab.label}
+            <span className="tab-shortcut" aria-hidden="true">{shortcut}</span>
+            <span className="tab-label">{tab.label}</span>
           </button>
         );
       })}

@@ -13,10 +13,7 @@ body {
   min-width: 320px;
   font-family: "IBM Plex Sans", sans-serif;
   color: var(--ink);
-  background:
-    radial-gradient(circle at top left, rgba(74, 163, 255, 0.24), transparent 24%),
-    radial-gradient(circle at top right, rgba(57, 192, 214, 0.16), transparent 22%),
-    linear-gradient(180deg, #091321 0%, var(--bg) 42%, #040913 100%);
+  background: var(--bg);
 }
 
 body::before {
@@ -25,10 +22,9 @@ body::before {
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(157, 179, 202, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(157, 179, 202, 0.04) 1px, transparent 1px);
+    linear-gradient(rgba(149, 199, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(183, 166, 255, 0.045) 1px, transparent 1px);
   background-size: 46px 46px;
-  mask-image: radial-gradient(circle at center, black 35%, transparent 92%);
 }
 
 button,

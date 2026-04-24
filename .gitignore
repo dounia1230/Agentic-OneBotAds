@@ -19,10 +19,13 @@ apps/web/.vite/
 # Generated local data
 data/chroma/*
 !data/chroma/.gitkeep
+vector_store/chroma/*
+!vector_store/chroma/.gitkeep
 outputs/ad_copy/*
 !outputs/ad_copy/.gitkeep
 outputs/images/*
 !outputs/images/.gitkeep
+.codex/
 
 # OS / editor
 .DS_Store

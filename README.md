@@ -12,20 +12,6 @@ The web app now includes a unified `Marketing Assistant` workspace that can take
 - Ollama with `qwen3:8b` and `nomic-embed-text:latest`
 - Ollama for local text generation, with optional hosted Qwen Image support when image generation is enabled
 
-## Repo Shape
-
-```text
-.
-|- app.py
-|- apps/api/src/onebot_ads
-|- apps/web
-|- data
-|- docs
-|- outputs
-|- rag
-`- vector_store
-```
-
 ## Local Setup
 
 ### Backend on Windows
@@ -137,14 +123,6 @@ Frontend runs on `http://localhost:5173`. Backend runs on `http://127.0.0.1:8000
 - Publication visuals are composed in code only after a background image is generated.
 - Generated images are saved under `outputs/images` and served by FastAPI at `/outputs/images/...`.
 
-## Example CLI Requests
-
-- Start the CLI explicitly with `python app.py cli`
-- `Analyze my campaigns.`
-- `Create a LinkedIn publication with image for Agentic OneBotAds targeting SMEs.`
-- `What tone should I use for OneBotAds ads?`
-- `How should I optimize my budget?`
-
 ## API Endpoints
 
 - `GET /api/v1/health`
@@ -216,20 +194,3 @@ curl -X POST http://127.0.0.1:8000/api/v1/campaigns/draft \
     "image_provider": "qwen_image"
   }'
 ```
-
-## Useful Commands
-
-```text
-pytest
-ruff check .
-npm run build --prefix apps/web
-```
-
-## Documentation
-
-- [Product Notes](docs/PRODUCT.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Agents](docs/AGENTS.md)
-- [ChromaDB RAG](docs/CHROMADB_RAG.md)
-- [API Contracts](docs/API_CONTRACTS.md)
-- [Implementation Notes](docs/CODEX_IMPLEMENTATION_NOTES.md)

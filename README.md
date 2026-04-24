@@ -12,6 +12,53 @@ The web app now includes a unified `Marketing Assistant` workspace that can take
 - Ollama with `qwen3:8b` and `nomic-embed-text:latest`
 - Ollama for local text generation, with optional hosted Qwen Image support when image generation is enabled
 
+## Orchestrator And Agent Logic
+
+```mermaid
+flowchart TD
+    U[User request] --> CS[CampaignService.handle_request]
+    CS --> O[OrchestratorAgent.run]
+    O --> RC[Build request context<br/>infer intent, platform, audience, goal]
+    RC --> PL[Build orchestration plan]
+
+    PL --> BA{Intent / flags}
+
+    BA -->|brand_advice| RAG[RAG agent]
+    BA -->|campaign_analysis| ANA[Analyst agent]
+    BA -->|optimization| ANA
+    BA -->|ad_copy| RAGC[RAG agent]
+    BA -->|generate_publication| RAGP[RAG agent]
+    BA -->|full_report| ANAR[Analyst agent]
+    BA -->|run_all_agents| ALLRAG[RAG agent]
+
+    ANA --> OPT[Optimization agent]
+    RAGC --> CRE[Creative agent]
+    CRE --> COMP[Compliance agent]
+
+    RAGP --> CREP[Creative agent]
+    CREP --> IMG[Image agent]
+    IMG --> COMPP[Compliance agent]
+    COMPP --> PUB[Publication agent]
+
+    ANAR --> OPTR[Optimization agent]
+    OPTR --> REP[Reporting agent]
+
+    ALLRAG --> ALLANA[Analyst agent]
+    ALLANA --> ALLCRE[Creative agent]
+    ALLCRE --> ALLOPT[Optimization agent]
+    ALLOPT --> ALLIMG[Image agent]
+    ALLIMG --> ALLCOMP[Compliance agent]
+    ALLCOMP --> ALLPUB[Publication agent]
+    ALLPUB --> ALLREP[Reporting agent]
+
+    RAG --> RESP[AssistantResponse]
+    OPT --> RESP
+    COMP --> RESP
+    PUB --> RESP
+    REP --> RESP
+    ALLREP --> RESP
+    RESP --> ART[Optional saved artifacts<br/>post bundle, report, image paths]
+```
 ## Local Setup
 
 ### Backend on Windows
@@ -172,25 +219,3 @@ Example assistant payload:
 }
 ```
 
-## Draft Image Test
-
-```bash
-curl -X POST http://127.0.0.1:8000/api/v1/campaigns/draft \
-  -H "Content-Type: application/json" \
-  -d '{
-    "product_name": "Agentic OneBotAds",
-    "audience": "SME marketing teams",
-    "goal": "Increase qualified leads",
-    "channels": ["linkedin", "meta"],
-    "tone": "professional, modern, direct",
-    "offer": "7-day pilot",
-    "key_points": ["faster launches", "brand-safe drafts"],
-    "brand_constraints": ["avoid hype", "no guaranteed outcomes"],
-    "landing_page_url": "https://example.com/demo",
-    "source_context_query": "Agentic OneBotAds SME LinkedIn campaign tone and positioning",
-    "generate_image_prompt": true,
-    "generate_image": true,
-    "compose_publication_image": true,
-    "image_provider": "qwen_image"
-  }'
-```

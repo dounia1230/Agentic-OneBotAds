@@ -26,6 +26,7 @@ outputs/ad_copy/*
 outputs/images/*
 !outputs/images/.gitkeep
 .codex/
+AGENTS.md
 
 # OS / editor
 .DS_Store

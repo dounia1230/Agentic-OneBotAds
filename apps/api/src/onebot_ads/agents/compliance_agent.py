@@ -41,6 +41,8 @@ PROHIBITED_PHRASES = [
     "perfect targeting",
     "guaranteed success",
     "guaranteed leads",
+    "satisfaction guarantee",
+    "free trial",
     "without risk",
     "no risk",
     "instant results",
@@ -60,6 +62,14 @@ UNSUPPORTED_REGEX_PATTERNS = [
     (
         r"\bsaving\s+\d+\+?\s+hours\b",
         "Avoid specific time-saving claims unless they are supported by evidence.",
+    ),
+    (
+        r"\b\d+\+?\s+brands\b",
+        "Avoid specific customer-count claims unless they are supported by evidence.",
+    ),
+    (
+        r"\b\d+\+?\s+(customers|teams|clients|companies)\b",
+        "Avoid specific customer-count claims unless they are supported by evidence.",
     ),
 ]
 

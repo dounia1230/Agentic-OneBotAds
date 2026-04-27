@@ -11,6 +11,7 @@ export type AssistantRequest = {
   save_output?: boolean;
   export_report?: boolean;
   use_web_search?: boolean;
+  min_answer_words?: number;
 };
 
 export type KnowledgeScope = {

@@ -3,16 +3,26 @@ import json
 from onebot_ads.core.config import Settings
 
 
-def build_chat_model(settings: Settings):
+def build_chat_model(
+    settings: Settings,
+    *,
+    output_json: bool = True,
+    num_predict: int = 900,
+):
     from langchain_ollama import ChatOllama
 
+    kwargs = {
+        "model": settings.llm_model,
+        "base_url": settings.ollama_base_url,
+        "temperature": settings.llm_temperature,
+        "num_predict": num_predict,
+        "validate_model_on_init": False,
+    }
+    if output_json:
+        kwargs["format"] = "json"
+
     return ChatOllama(
-        model=settings.llm_model,
-        base_url=settings.ollama_base_url,
-        temperature=settings.llm_temperature,
-        num_predict=900,
-        validate_model_on_init=False,
-        format="json",
+        **kwargs,
     )
 
 

@@ -2,10 +2,15 @@ import { FormEvent, KeyboardEvent, useEffect, useLayoutEffect, useRef, useState 
 
 import { useScrollIntoViewOnChange } from "../../../hooks/useScrollIntoViewOnChange";
 import {
+  getHealth,
+  getRuntimeSummary,
+  reindexKnowledgeBase,
   runAssistant,
 } from "../../../services/api/onebot";
 import type {
   AssistantResponse,
+  HealthResponse,
+  RuntimeSummary,
 } from "../../../types/api";
 
 function ArrowUpIcon() {
@@ -78,9 +83,14 @@ export function KnowledgeBaseTab() {
   const [question, setQuestion] = useState("");
   const [submittedQuestion, setSubmittedQuestion] = useState("");
   const [useWebSearch, setUseWebSearch] = useState(true);
+  const [longAnswer, setLongAnswer] = useState(true);
   const [response, setResponse] = useState<AssistantResponse | null>(null);
+  const [health, setHealth] = useState<HealthResponse | null>(null);
+  const [runtime, setRuntime] = useState<RuntimeSummary | null>(null);
+  const [runtimeMessage, setRuntimeMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isReindexing, setIsReindexing] = useState(false);
 
   const hasQuestion = question.trim().length > 0;
   const hasConversationStarted =
@@ -146,6 +156,33 @@ export function KnowledgeBaseTab() {
     input.style.height = `${Math.max(input.scrollHeight, hasConversationStarted ? 58 : 88)}px`;
   }, [question, hasConversationStarted]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRuntimeContext() {
+      try {
+        const [nextHealth, nextRuntime] = await Promise.all([getHealth(), getRuntimeSummary()]);
+        if (cancelled) {
+          return;
+        }
+
+        setHealth(nextHealth);
+        setRuntime(nextRuntime);
+        setRuntimeMessage(nextHealth.rag_enabled ? "RAG ready" : "RAG unavailable");
+      } catch {
+        if (!cancelled) {
+          setRuntimeMessage("Runtime details unavailable");
+        }
+      }
+    }
+
+    void loadRuntimeContext();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function handleQuestionKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key !== "Enter" || event.shiftKey) {
       return;
@@ -178,12 +215,29 @@ export function KnowledgeBaseTab() {
       const nextResponse = await runAssistant({ 
         message: nextQuestion,
         use_web_search: useWebSearch,
+        min_answer_words: longAnswer ? 800 : undefined,
       });
       setResponse(nextResponse);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to query the knowledge base.");
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleReindex() {
+    setRuntimeMessage(null);
+    setIsReindexing(true);
+
+    try {
+      const result = await reindexKnowledgeBase();
+      setRuntimeMessage(`Reindex complete: ${result.documents_indexed} documents`);
+    } catch (reindexError) {
+      setRuntimeMessage(
+        reindexError instanceof Error ? reindexError.message : "Unable to reindex the knowledge base.",
+      );
+    } finally {
+      setIsReindexing(false);
     }
   }
 
@@ -197,6 +251,30 @@ export function KnowledgeBaseTab() {
             <p className="eyebrow">Knowledge Base Q&A</p>
             <h2>Ask the local RAG workflow</h2>
           </header>
+
+          {runtimeMessage || runtime || health ? (
+            <div className={`knowledge-chat-runtime ${hasConversationStarted ? "is-inline" : ""}`}>
+              <div className="knowledge-chat-runtime-copy">
+                <p className="eyebrow">Knowledge Base Runtime</p>
+                <p>{runtimeMessage ?? "Runtime ready"}</p>
+                {runtime ? (
+                  <p>
+                    Index source: {runtime.knowledge_base_directory} • model: {runtime.ollama_embedding_model}
+                  </p>
+                ) : null}
+              </div>
+              <button
+                className="secondary-action"
+                type="button"
+                onClick={() => {
+                  void handleReindex();
+                }}
+                disabled={isReindexing}
+              >
+                {isReindexing ? "Reindexing..." : "Reindex KB"}
+              </button>
+            </div>
+          ) : null}
 
           {submittedQuestion || response?.rag || error ? (
             <div ref={resultsRef} className="knowledge-chat-results">
@@ -246,6 +324,16 @@ export function KnowledgeBaseTab() {
                 style={{ cursor: "pointer", width: "16px", height: "16px" }}
               />
               Web Search
+            </label>
+
+            <label style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--foreground-muted)", fontSize: "0.875rem", cursor: "pointer", userSelect: "none" }}>
+              <input
+                type="checkbox"
+                checked={longAnswer}
+                onChange={(e) => setLongAnswer(e.target.checked)}
+                style={{ cursor: "pointer", width: "16px", height: "16px" }}
+              />
+              Long answer (800+ words)
             </label>
 
             <button

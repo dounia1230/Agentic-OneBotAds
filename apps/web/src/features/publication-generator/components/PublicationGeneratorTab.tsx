@@ -114,6 +114,7 @@ function wrapPdfText(text: string, maxChars: number): string[] {
 type PublicationReportContent = {
   form: PublicationFormValues;
   publication: PublicationPackage;
+  publicationImageUrl: string | null;
   reviewNotes: string[];
   complianceIssues: string[];
 };
@@ -138,8 +139,7 @@ function renderReportListHtml(items: string[]): string {
 function buildPublicationReportPlainText({
   form,
   publication,
-  reviewNotes,
-  complianceIssues,
+  publicationImageUrl,
 }: PublicationReportContent): string {
   const lines = [
     "Publication Draft",
@@ -158,22 +158,8 @@ function buildPublicationReportPlainText({
     `Hashtags: ${publication.hashtags.join(" ")}`,
   ];
 
-  if (reviewNotes.length > 0) {
-    lines.push("", "Review Recommended", ...reviewNotes.map((note) => `- ${note}`));
-  }
-
-  if (form.generateImage) {
-    lines.push(
-      "",
-      "Creative Brief",
-      `Image Prompt: ${publication.image_prompt ?? "Not provided."}`,
-      `Alt Text: ${publication.alt_text ?? "Not provided."}`,
-      `Asset Status: ${
-        publication.image_path
-          ? `Image file: ${publication.image_path}`
-          : "Design asset pending; use the prompt above for production."
-      }`,
-    );
+  if (publicationImageUrl) {
+    lines.push("", "Publication Visual", "Included in the PDF and HTML export.");
   }
 
   lines.push("", "Recommendations");
@@ -184,70 +170,29 @@ function buildPublicationReportPlainText({
     lines.push("Review the copy against the campaign goal, audience fit, and platform tone before scheduling.");
   }
 
-  if (complianceIssues.length > 0) {
-    lines.push("", "Compliance Notes", ...complianceIssues.map((issue) => `- ${issue}`));
-  }
-
   return lines.join("\n");
 }
 
 function buildPublicationReportHtml({
   form,
   publication,
-  reviewNotes,
-  complianceIssues,
+  publicationImageUrl,
 }: PublicationReportContent): string {
   const optimizationNotes =
     publication.optimization_notes.length > 0
       ? renderReportListHtml(publication.optimization_notes)
       : `<p>Review the copy against the campaign goal, audience fit, and platform tone before scheduling.</p>`;
 
-  const creativeBrief = form.generateImage
+  const publicationVisual = publicationImageUrl
     ? `
       <section>
-        <h2>Creative Brief</h2>
-        <dl class="field-grid">
-          <div class="field field-wide">
-            <dt>Image Prompt</dt>
-            <dd>${escapeHtml(publication.image_prompt ?? "Not provided.")}</dd>
-          </div>
-          <div class="field">
-            <dt>Alt Text</dt>
-            <dd>${escapeHtml(publication.alt_text ?? "Not provided.")}</dd>
-          </div>
-          <div class="field">
-            <dt>Asset Status</dt>
-            <dd>${escapeHtml(
-              publication.image_path
-                ? `Image file: ${publication.image_path}`
-                : "Design asset pending; use the prompt above for production.",
-            )}</dd>
-          </div>
-        </dl>
+        <p class="eyebrow">Publication Visual</p>
+        <figure class="publication-visual">
+          <img src="${escapeHtml(publicationImageUrl)}" alt="${escapeHtml(publication.alt_text ?? publication.headline)}" />
+        </figure>
       </section>
     `
     : "";
-
-  const reviewSection =
-    reviewNotes.length > 0
-      ? `
-        <section class="callout">
-          <p class="eyebrow">Review Recommended</p>
-          <h2>Publication available with revision notes</h2>
-          ${renderReportListHtml(reviewNotes)}
-        </section>
-      `
-      : "";
-
-  const complianceNotes =
-    complianceIssues.length > 0
-      ? `
-        <section>
-          <p class="eyebrow">Compliance Notes</p>
-          ${renderReportListHtml(complianceIssues)}
-        </section>
-      `
-      : "";
 
   return `
     <article class="report-shell">
@@ -270,7 +215,7 @@ function buildPublicationReportHtml({
           </div>
         </dl>
       </header>
-      ${reviewSection}
+      ${publicationVisual}
       <section>
         <p class="eyebrow">Ready-to-publish copy</p>
         <h2>${escapeHtml(publication.headline)}</h2>
@@ -278,12 +223,10 @@ function buildPublicationReportHtml({
         <p class="cta">${escapeHtml(publication.cta)}</p>
         <p class="tags">${escapeHtml(publication.hashtags.join(" "))}</p>
       </section>
-      ${creativeBrief}
       <section>
         <h2>Recommendations</h2>
         ${optimizationNotes}
       </section>
-      ${complianceNotes}
     </article>
   `;
 }
@@ -352,6 +295,18 @@ function buildPublicationReportDocument(content: PublicationReportContent): { ht
           .field-wide {
             grid-column: 1 / -1;
           }
+          .publication-visual {
+            margin: 18px 0 0;
+          }
+          .publication-visual img {
+            display: block;
+            width: 100%;
+            max-height: 520px;
+            object-fit: contain;
+            border-radius: 14px;
+            border: 1px solid var(--line);
+            background: #f8fbff;
+          }
           dt {
             margin-bottom: 6px;
             font-size: 12px;
@@ -404,7 +359,7 @@ function buildPublicationReportDocument(content: PublicationReportContent): { ht
 }
 
 function buildPdfLineSpecs(content: PublicationReportContent): PdfLineSpec[] {
-  const { form, publication, reviewNotes, complianceIssues } = content;
+  const { form, publication } = content;
   const lines: PdfLineSpec[] = [
     { text: "Publication Draft", font: "F2", size: 11, leading: 14, color: [0.43, 0.3, 1] },
     { text: publication.headline, font: "F2", size: 24, leading: 30, color: [0.06, 0.09, 0.16], gapBefore: 6 },
@@ -414,13 +369,6 @@ function buildPdfLineSpecs(content: PublicationReportContent): PdfLineSpec[] {
     { text: `Recommended Time: ${publication.recommended_schedule}`, font: "F1", size: 11, leading: 15, color: [0.06, 0.09, 0.16] },
   ];
 
-  if (reviewNotes.length > 0) {
-    lines.push({ text: "Review Recommended", font: "F2", size: 16, leading: 21, color: [0.06, 0.09, 0.16], gapBefore: 18 });
-    for (const note of reviewNotes) {
-      lines.push({ text: `- ${note}`, font: "F1", size: 11, leading: 16, color: [0.06, 0.09, 0.16] });
-    }
-  }
-
   lines.push(
     { text: "Ready-to-publish copy", font: "F2", size: 16, leading: 21, color: [0.06, 0.09, 0.16], gapBefore: 18 },
     { text: publication.headline, font: "F2", size: 18, leading: 23, color: [0.06, 0.09, 0.16], gapBefore: 4 },
@@ -428,21 +376,6 @@ function buildPdfLineSpecs(content: PublicationReportContent): PdfLineSpec[] {
     { text: `CTA: ${publication.cta}`, font: "F2", size: 11, leading: 16, color: [0.37, 0.56, 0.87], gapBefore: 6 },
     { text: `Hashtags: ${publication.hashtags.join(" ")}`, font: "F1", size: 11, leading: 16, color: [0.32, 0.38, 0.47] },
   );
-
-  if (form.generateImage) {
-    lines.push(
-      { text: "Creative Brief", font: "F2", size: 16, leading: 21, color: [0.06, 0.09, 0.16], gapBefore: 18 },
-      { text: `Image Prompt: ${publication.image_prompt ?? "Not provided."}`, font: "F1", size: 11, leading: 16, color: [0.06, 0.09, 0.16] },
-      { text: `Alt Text: ${publication.alt_text ?? "Not provided."}`, font: "F1", size: 11, leading: 16, color: [0.06, 0.09, 0.16] },
-      {
-        text: `Asset Status: ${publication.image_path ? `Image file: ${publication.image_path}` : "Design asset pending; use the prompt above for production."}`,
-        font: "F1",
-        size: 11,
-        leading: 16,
-        color: [0.06, 0.09, 0.16],
-      },
-    );
-  }
 
   lines.push({ text: "Recommendations", font: "F2", size: 16, leading: 21, color: [0.06, 0.09, 0.16], gapBefore: 18 });
 
@@ -460,23 +393,110 @@ function buildPdfLineSpecs(content: PublicationReportContent): PdfLineSpec[] {
     });
   }
 
-  if (complianceIssues.length > 0) {
-    lines.push({ text: "Compliance Notes", font: "F2", size: 16, leading: 21, color: [0.06, 0.09, 0.16], gapBefore: 18 });
-    for (const issue of complianceIssues) {
-      lines.push({ text: `- ${issue}`, font: "F1", size: 11, leading: 16, color: [0.06, 0.09, 0.16] });
-    }
-  }
-
   return lines;
 }
 
-function buildPublicationPdfBlob(content: PublicationReportContent): Blob {
+type EmbeddedPdfImage = {
+  bytes: Uint8Array;
+  width: number;
+  height: number;
+};
+
+function encodePdfText(value: string): Uint8Array {
+  return new TextEncoder().encode(value);
+}
+
+function binaryStringToBytes(value: string): Uint8Array {
+  const bytes = new Uint8Array(value.length);
+  for (let index = 0; index < value.length; index += 1) {
+    bytes[index] = value.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function loadImageElement(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Unable to load publication image."));
+    image.src = url;
+  });
+}
+
+async function loadPdfImage(url: string | null): Promise<EmbeddedPdfImage | null> {
+  if (!url) {
+    return null;
+  }
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Unable to fetch publication image (${response.status}).`);
+  }
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+
+  try {
+    const image = await loadImageElement(objectUrl);
+    const canvas = document.createElement("canvas");
+    canvas.width = image.naturalWidth || image.width;
+    canvas.height = image.naturalHeight || image.height;
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("Unable to prepare publication image for PDF export.");
+    }
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    const jpegDataUrl = canvas.toDataURL("image/jpeg", 0.92);
+    const base64 = jpegDataUrl.split(",", 2)[1] ?? "";
+
+    return {
+      bytes: binaryStringToBytes(atob(base64)),
+      width: canvas.width,
+      height: canvas.height,
+    };
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function buildPdfObject(
+  objectNumber: number,
+  bodyParts: Array<string | Uint8Array>,
+): Array<string | Uint8Array> {
+  return [`${objectNumber} 0 obj\n`, ...bodyParts, "\nendobj\n"];
+}
+
+function getPdfPartLength(part: string | Uint8Array): number {
+  return typeof part === "string" ? encodePdfText(part).length : part.length;
+}
+
+function finalizePdf(parts: Array<string | Uint8Array>): Blob {
+  const totalLength = parts.reduce((sum, part) => sum + getPdfPartLength(part), 0);
+  const bytes = new Uint8Array(totalLength);
+  let offset = 0;
+
+  for (const part of parts) {
+    const nextBytes = typeof part === "string" ? encodePdfText(part) : part;
+    bytes.set(nextBytes, offset);
+    offset += nextBytes.length;
+  }
+
+  return new Blob([bytes], { type: "application/pdf" });
+}
+
+async function buildPublicationPdfBlob(content: PublicationReportContent): Promise<Blob> {
   const pageWidth = 595;
   const pageHeight = 842;
   const marginX = 56;
   const marginTop = 60;
   const marginBottom = 60;
   const contentWidth = pageWidth - marginX * 2;
+  const publicationImage = await loadPdfImage(content.publicationImageUrl).catch(() => null);
 
   const pages: string[][] = [[]];
   let currentPage = pages[0];
@@ -485,7 +505,10 @@ function buildPublicationPdfBlob(content: PublicationReportContent): Blob {
   const maxCharsForSize = (size: number) =>
     Math.max(24, Math.floor(contentWidth / Math.max(5.6, size * 0.54)));
 
-  for (const spec of buildPdfLineSpecs(content)) {
+  const lineSpecs = buildPdfLineSpecs(content);
+
+  for (let index = 0; index < lineSpecs.length; index += 1) {
+    const spec = lineSpecs[index];
     if (spec.gapBefore) {
       y -= spec.gapBefore;
     }
@@ -507,32 +530,76 @@ function buildPublicationPdfBlob(content: PublicationReportContent): Blob {
 
       y -= spec.leading;
     }
+
+    if (publicationImage && index === 5) {
+      const maxImageHeight = 250;
+      let imageWidth = contentWidth;
+      let imageHeight = (publicationImage.height / publicationImage.width) * imageWidth;
+
+      if (imageHeight > maxImageHeight) {
+        imageHeight = maxImageHeight;
+        imageWidth = (publicationImage.width / publicationImage.height) * imageHeight;
+      }
+
+      if (y - 28 - imageHeight < marginBottom) {
+        currentPage = [];
+        pages.push(currentPage);
+        y = pageHeight - marginTop;
+      }
+
+      currentPage.push(
+        `BT /F2 16 Tf 0.06 0.09 0.16 rg 1 0 0 1 ${marginX} ${y - 10} Tm (${escapePdfText("Publication Visual")}) Tj ET`,
+      );
+
+      const imageX = marginX + (contentWidth - imageWidth) / 2;
+      const imageY = y - 28 - imageHeight;
+      currentPage.push(`q ${imageWidth} 0 0 ${imageHeight} ${imageX} ${imageY} cm /Im1 Do Q`);
+      y = imageY - 22;
+    }
   }
 
-  const objects: string[] = [];
+  const objects: Array<Array<string | Uint8Array> | undefined> = [];
   const pageObjectNumbers: number[] = [];
 
-  objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
-  objects[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
-  objects[4] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>";
+  objects[1] = ["<< /Type /Catalog /Pages 2 0 R >>"];
+  objects[3] = ["<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"];
+  objects[4] = ["<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>"];
 
   let nextObjectNumber = 5;
+  let imageObjectNumber: number | null = null;
+
+  if (publicationImage) {
+    imageObjectNumber = nextObjectNumber++;
+    objects[imageObjectNumber] = [
+      `<< /Type /XObject /Subtype /Image /Width ${publicationImage.width} /Height ${publicationImage.height} ` +
+        `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${publicationImage.bytes.length} >>\nstream\n`,
+      publicationImage.bytes,
+      "\nendstream",
+    ];
+  }
+
   for (const commands of pages) {
     const contentObjectNumber = nextObjectNumber++;
     const pageObjectNumber = nextObjectNumber++;
     const stream = commands.join("\n");
-    objects[contentObjectNumber] = `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
-    objects[pageObjectNumber] =
+    objects[contentObjectNumber] = [`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`];
+    objects[pageObjectNumber] = [
       `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] ` +
-      "/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> " +
-      `/Contents ${contentObjectNumber} 0 R >>`;
+      "/Resources << /Font << /F1 3 0 R /F2 4 0 R >> " +
+      (imageObjectNumber ? `/XObject << /Im1 ${imageObjectNumber} 0 R >> ` : "") +
+      ">> " +
+      `/Contents ${contentObjectNumber} 0 R >>`,
+    ];
     pageObjectNumbers.push(pageObjectNumber);
   }
 
-  objects[2] = `<< /Type /Pages /Kids [${pageObjectNumbers.map((n) => `${n} 0 R`).join(" ")}] /Count ${pageObjectNumbers.length} >>`;
+  objects[2] = [
+    `<< /Type /Pages /Kids [${pageObjectNumbers.map((n) => `${n} 0 R`).join(" ")}] /Count ${pageObjectNumbers.length} >>`,
+  ];
 
-  let pdf = "%PDF-1.4\n";
+  const pdfParts: Array<string | Uint8Array> = ["%PDF-1.4\n"];
   const offsets: number[] = [];
+  let currentOffset = getPdfPartLength(pdfParts[0]);
 
   for (let index = 1; index < objects.length; index += 1) {
     const objectBody = objects[index];
@@ -540,21 +607,23 @@ function buildPublicationPdfBlob(content: PublicationReportContent): Blob {
       continue;
     }
 
-    offsets[index] = pdf.length;
-    pdf += `${index} 0 obj\n${objectBody}\nendobj\n`;
+    offsets[index] = currentOffset;
+    const objectParts = buildPdfObject(index, objectBody);
+    pdfParts.push(...objectParts);
+    currentOffset += objectParts.reduce((sum, part) => sum + getPdfPartLength(part), 0);
   }
 
-  const xrefOffset = pdf.length;
-  pdf += `xref\n0 ${objects.length}\n`;
-  pdf += "0000000000 65535 f \n";
+  const xrefOffset = currentOffset;
+  pdfParts.push(`xref\n0 ${objects.length}\n`);
+  pdfParts.push("0000000000 65535 f \n");
 
   for (let index = 1; index < objects.length; index += 1) {
     const offset = offsets[index] ?? 0;
-    pdf += `${offset.toString().padStart(10, "0")} 00000 n \n`;
+    pdfParts.push(`${offset.toString().padStart(10, "0")} 00000 n \n`);
   }
 
-  pdf += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-  return new Blob([pdf], { type: "application/pdf" });
+  pdfParts.push(`trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
+  return finalizePdf(pdfParts);
 }
 
 export function PublicationGeneratorTab() {
@@ -646,6 +715,7 @@ export function PublicationGeneratorTab() {
     return {
       form,
       publication: currentPublication,
+      publicationImageUrl: publicationPreviewUrl,
       reviewNotes,
       complianceIssues,
     };
@@ -680,14 +750,22 @@ export function PublicationGeneratorTab() {
     }
   }
 
-  function handleDownloadPdf() {
+  async function handleDownloadPdf() {
     if (!publication) {
       return;
     }
 
     const reportContent = getReportContent(publication);
     const reportDocument = buildPublicationReportDocument(reportContent);
-    const pdfBlob = buildPublicationPdfBlob(reportContent);
+    let pdfBlob: Blob;
+    let exportMessage = "PDF download started.";
+
+    try {
+      pdfBlob = await buildPublicationPdfBlob(reportContent);
+    } catch {
+      pdfBlob = await buildPublicationPdfBlob({ ...reportContent, publicationImageUrl: null });
+      exportMessage = "The publication image could not be embedded, so a text-only PDF was downloaded.";
+    }
     const downloadUrl = URL.createObjectURL(pdfBlob);
     const downloadLink = document.createElement("a");
 
@@ -703,7 +781,7 @@ export function PublicationGeneratorTab() {
       URL.revokeObjectURL(downloadUrl);
     }, 1000);
 
-    setActionMessage("PDF download started.");
+    setActionMessage(exportMessage);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -926,33 +1004,6 @@ export function PublicationGeneratorTab() {
                   ))}
                 </div>
 
-                {campaignDraft.image_prompt ? (
-                  <dl className="report-fields">
-                    <div className="report-field report-field-wide">
-                      <dt>Draft Image Prompt</dt>
-                      <dd>{campaignDraft.image_prompt.prompt}</dd>
-                    </div>
-                    <div className="report-field">
-                      <dt>Provider</dt>
-                      <dd>{campaignDraft.image_prompt.provider}</dd>
-                    </div>
-                    <div className="report-field">
-                      <dt>Status</dt>
-                      <dd>{campaignDraft.image_prompt.status}</dd>
-                    </div>
-                  </dl>
-                ) : null}
-              </section>
-            ) : null}
-
-            {campaignDraft?.warnings.length ? (
-              <section className="warning-card">
-                <p className="eyebrow">Draft Warnings</p>
-                <ul className="bullet-list">
-                  {campaignDraft.warnings.map((warning) => (
-                    <li key={warning}>{warning}</li>
-                  ))}
-                </ul>
               </section>
             ) : null}
 
@@ -987,64 +1038,23 @@ export function PublicationGeneratorTab() {
                 {form.generateImage ? (
                   <section className="report-section" aria-labelledby="publication-brief-heading">
                     <div className="report-section-heading">
-                      <h4 id="publication-brief-heading">Creative Brief</h4>
+                      <h4 id="publication-brief-heading">Publication Visual</h4>
                     </div>
-
-                    <dl className="report-fields">
-                      <div className="report-field report-field-wide">
-                        <dt>Image Prompt</dt>
-                        <dd>{publication.image_prompt}</dd>
-                      </div>
-                      <div className="report-field">
-                        <dt>Alt Text</dt>
-                        <dd>{publication.alt_text}</dd>
-                      </div>
-                      <div className="report-field">
-                        <dt>Asset Status</dt>
-                        <dd>
-                          {imageResult?.status ?? (publication.image_path ? "generated" : "prompt_only")}
-                        </dd>
-                      </div>
-                      <div className="report-field">
-                        <dt>Provider</dt>
-                        <dd>{imageResult?.provider ?? "Not provided"}</dd>
-                      </div>
-                      <div className="report-field report-field-wide">
-                        <dt>Image File</dt>
-                        <dd>
-                          {publication.image_path
-                            ? publication.image_path
-                            : "Design asset pending; use the prompt above for production."}
-                        </dd>
-                      </div>
-                    </dl>
-
-                    {imageResult?.error ? (
-                      <div className="warning-card guidance-card">
-                        <p className="eyebrow">Image Error</p>
-                        <p>{imageResult.error}</p>
-                      </div>
-                    ) : null}
-
-                    {imageResult?.notes.length ? (
-                      <div className="warning-card guidance-card">
-                        <p className="eyebrow">Image Notes</p>
-                        <ul className="bullet-list">
-                          {imageResult.notes.map((note) => (
-                            <li key={note}>{note}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
 
                     {canPreviewImage(
                       publication?.image_url ?? imageResult?.image_url ?? publication?.image_path ?? imageResult?.image_path,
                     ) && publicationPreviewUrl ? (
                       <div className="detail-card guidance-card">
                         <p className="eyebrow">Preview</p>
-                        <img className="image-preview" src={publicationPreviewUrl} alt={publication.alt_text ?? ""} />
+                        <img
+                          className="image-preview image-preview-full"
+                          src={publicationPreviewUrl}
+                          alt={publication.alt_text ?? ""}
+                        />
                       </div>
-                    ) : null}
+                    ) : (
+                      <p>Publication visual is not available yet.</p>
+                    )}
                   </section>
                 ) : null}
 
@@ -1093,7 +1103,9 @@ export function PublicationGeneratorTab() {
                   <button
                     className="report-icon-button"
                     type="button"
-                    onClick={handleDownloadPdf}
+                    onClick={() => {
+                      void handleDownloadPdf();
+                    }}
                     aria-label="Download report as PDF"
                     title="Download report as PDF"
                   >

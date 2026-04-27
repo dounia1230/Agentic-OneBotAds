@@ -187,14 +187,24 @@ Recommended layout:
 ```text
 data/knowledge_base/
 |- shared/
-|  `- platform_ads_rules.md
+|  |- marketing_principles.md
+|  |- copy_frameworks.md
+|  |- offer_strategies.md
+|  `- morocco_market_signals.md
 `- brands/
-   `- cuddlenest-plushies/
-      |- brand_guidelines.md
-      `- campaigns/
-         `- spring-launch/
-            `- brief.md
+   |- cuddlenest-plushies/
+   |  |- brand_guidelines.md
+   |  `- campaigns/
+   |     `- spring-launch/
+   |        `- brief.md
+   `- morocco-boutique-riad/
+      `- idea_overview.md
 ```
+
+The repo now supports a cleaner starter setup:
+- put reusable marketing knowledge in `shared/`
+- put project-specific starter context under `brands/<slug>/`
+- keep campaign-specific briefs under `brands/<slug>/campaigns/<campaign>/`
 
 Request-level scoping:
 

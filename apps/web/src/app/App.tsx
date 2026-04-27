@@ -58,6 +58,11 @@ export default function App() {
           <span className="sidebar-brand-name">OneBotAds</span>
         </div>
 
+        <div className="sidebar-intro">
+          <p className="eyebrow">Studio Workspace</p>
+          <p>Grounded strategy, campaign analysis, and client-ready publication output in one local-first flow.</p>
+        </div>
+
         <TabNav
           tabs={workspaceTabs}
           activeTab={activeTab}

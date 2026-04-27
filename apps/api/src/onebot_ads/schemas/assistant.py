@@ -22,6 +22,7 @@ class AssistantRequest(BaseModel):
     save_output: bool = False
     export_report: bool = False
     use_web_search: bool = False
+    min_answer_words: int | None = Field(default=None, ge=100, le=2000)
 
 
 class RAGAgentResponse(BaseModel):

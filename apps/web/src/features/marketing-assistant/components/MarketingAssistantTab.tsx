@@ -39,6 +39,8 @@ const defaultAssistantForm: AssistantFormValues = {
   saveOutput: false,
 };
 
+const MIN_MARKETING_ASSISTANT_ANSWER_WORDS = 350;
+
 function renderTextBlocks(value: string) {
   return value
     .split(/\r?\n/)
@@ -100,6 +102,7 @@ export function MarketingAssistantTab({
         platform: form.platform,
         audience: form.audience,
         goal: form.goal,
+        min_answer_words: MIN_MARKETING_ASSISTANT_ANSWER_WORDS,
         campaign_csv_content: campaignCsv?.csvText || undefined,
         campaign_csv_filename: campaignCsv?.fileName || undefined,
         run_all_agents: form.runAllAgents,
@@ -117,7 +120,21 @@ export function MarketingAssistantTab({
     }
   }
 
-  const previewUrl = resolveMediaUrl(response?.image?.image_url ?? response?.image?.image_path);
+  const imageResult = response?.image ?? null;
+  const previewUrl = resolveMediaUrl(imageResult?.image_url ?? imageResult?.image_path);
+  const knowledgeAnswer = response?.rag?.answer ?? "";
+  const hasVisualPreview = imageResult
+    ? imageResult.status === "composed" &&
+      canPreviewImage(imageResult.image_url ?? imageResult.image_path) &&
+      Boolean(previewUrl)
+    : false;
+  const shouldShowKnowledgeAnswer =
+    Boolean(response?.rag) &&
+    !response?.analysis &&
+    !response?.creative &&
+    !response?.optimization &&
+    !response?.publication &&
+    !response?.report;
 
   return (
     <div className={`tab-layout staged-tab ${response || error ? "is-active" : ""}`}>
@@ -272,7 +289,7 @@ export function MarketingAssistantTab({
               </article>
             </div>
 
-            {response.rag ? (
+            {shouldShowKnowledgeAnswer ? (
               <article className="detail-card">
                 <div className="card-header">
                   <div>
@@ -280,7 +297,7 @@ export function MarketingAssistantTab({
                     <h3>Grounded context</h3>
                   </div>
                 </div>
-                {renderTextBlocks(response.rag.answer)}
+                {renderTextBlocks(knowledgeAnswer)}
               </article>
             ) : null}
 
@@ -392,24 +409,22 @@ export function MarketingAssistantTab({
               </article>
             ) : null}
 
-            {response.image ? (
+            {imageResult && hasVisualPreview ? (
               <article className="detail-card">
                 <div className="card-header">
                   <div>
                     <p className="eyebrow">Visual Output</p>
-                    <h3>{response.image.status}</h3>
+                    <h3>{imageResult.status}</h3>
                   </div>
                 </div>
-                <p>{response.image.image_prompt}</p>
-                {response.image.notes.length > 0 ? (
+                <img className="image-preview image-preview-full" src={previewUrl ?? ""} alt={imageResult.alt_text} />
+                {imageResult.alt_text ? <p>{imageResult.alt_text}</p> : null}
+                {imageResult.notes.length > 0 ? (
                   <ul className="bullet-list">
-                    {response.image.notes.map((note) => (
+                    {imageResult.notes.map((note) => (
                       <li key={note}>{note}</li>
                     ))}
                   </ul>
-                ) : null}
-                {canPreviewImage(response.image.image_url ?? response.image.image_path) && previewUrl ? (
-                  <img className="image-preview" src={previewUrl} alt={response.image.alt_text} />
                 ) : null}
               </article>
             ) : null}

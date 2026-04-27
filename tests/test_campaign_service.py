@@ -5,7 +5,12 @@ from fastapi.testclient import TestClient
 from onebot_ads.api.dependencies import get_campaign_service
 from onebot_ads.core.config import Settings
 from onebot_ads.main import app
-from onebot_ads.schemas.campaigns import CampaignBrief, ContextSnippet
+from onebot_ads.schemas.campaigns import (
+    AssistantResponse,
+    CampaignBrief,
+    ContextSnippet,
+    OrchestrationPlan,
+)
 from onebot_ads.services.campaign_service import CampaignService
 
 
@@ -310,3 +315,33 @@ def test_assistant_route_uses_uploaded_campaign_csv_for_analysis() -> None:
         in payload["optimization"]["quick_wins"][0]["recommendation"]
     )
     assert "LinkedIn" in payload["optimization"]["quick_wins"][0]["reason"]
+
+
+def test_campaign_service_passes_min_answer_words_to_orchestrator(monkeypatch) -> None:
+    settings = Settings(enable_live_llm=False, enable_rag=True)
+    service = CampaignService(settings, knowledge_base=StubKnowledgeBase())
+    captured: dict[str, object] = {}
+
+    def fake_run(user_message: str, **kwargs) -> AssistantResponse:
+        captured["user_message"] = user_message
+        captured.update(kwargs)
+        return AssistantResponse(
+            intent="brand_advice",
+            plan=OrchestrationPlan(
+                intent="brand_advice",
+                agents_to_call=["rag_agent"],
+                final_format="grounded_brand_guidance",
+            ),
+        )
+
+    monkeypatch.setattr(service.orchestrator_agent, "run", fake_run)
+
+    service.handle_request(
+        "Give me a detailed answer about positioning.",
+        use_web_search=True,
+        min_answer_words=800,
+    )
+
+    assert captured["user_message"] == "Give me a detailed answer about positioning."
+    assert captured["use_web_search"] is True
+    assert captured["min_answer_words"] == 800

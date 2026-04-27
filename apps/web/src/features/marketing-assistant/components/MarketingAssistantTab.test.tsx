@@ -15,10 +15,13 @@ afterEach(() => {
 });
 
 test("submits a unified assistant request and renders multi-agent output", async () => {
-  fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+  fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
 
     if (url.endsWith("/api/v1/assistant/run")) {
+      const payload = JSON.parse(String(init?.body ?? "{}"));
+      expect(payload.min_answer_words).toBe(350);
+
       return new Response(
         JSON.stringify({
           intent: "full_workflow",
@@ -95,7 +98,68 @@ test("submits a unified assistant request and renders multi-agent output", async
     expect(screen.getByRole("heading", { name: /Campaign insights/i })).toBeTruthy();
   });
 
-  expect(screen.getByText(/Use a direct and credible tone/i)).toBeTruthy();
+  expect(screen.queryByText(/Grounded context/i)).toBeNull();
   expect(screen.getByText(/Increase budget on CAMP003/i)).toBeTruthy();
   expect(screen.getByText(/Smarter ads for SMEs/i)).toBeTruthy();
+});
+
+test("hides visual output when the image is not composed yet", async () => {
+  fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+    const url = String(input);
+
+    if (url.endsWith("/api/v1/assistant/run")) {
+      return new Response(
+        JSON.stringify({
+          intent: "full_workflow",
+          plan: {
+            intent: "full_workflow",
+            agents_to_call: ["rag_agent", "creative_agent"],
+            final_format: "full_workflow_bundle",
+          },
+          creative: {
+            headline: "Smarter ads for SMEs",
+            primary_text: "Launch grounded ad copy faster.",
+            description: "Description",
+            slogan: "Smarter ads. Faster decisions.",
+            cta: "Discover the solution",
+            hashtags: ["#OneBotAds"],
+            ab_variants: [],
+          },
+          image: {
+            prompt: "Create a clean LinkedIn campaign image.",
+            provider: "qwen_image",
+            status: "prompt_ready",
+            image_path: "outputs\\images\\marketing_assistant_preview.png",
+            image_url: null,
+            alt_text: "A campaign workspace.",
+            notes: [],
+            fallback_used: false,
+            fallback_attempted: false,
+            fallback_succeeded: false,
+          },
+          artifact_paths: [],
+          status: "ready_for_review",
+        }),
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unhandled request: ${url}`);
+  });
+
+  render(
+    <MarketingAssistantTab
+      campaignCsv={null}
+      onCampaignCsvChange={() => {}}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: /Run Marketing Assistant/i }));
+
+  await waitFor(() => {
+    expect(screen.getByText(/Smarter ads for SMEs/i)).toBeTruthy();
+  });
+
+  expect(screen.queryByText(/Visual Output/i)).toBeNull();
+  expect(screen.queryByText(/prompt_ready/i)).toBeNull();
 });

@@ -30,12 +30,17 @@ Adapt the copy to:
 Rules:
 1. Keep copy clear, persuasive, and specific.
 2. Avoid exaggerated claims like "guaranteed success" unless the brand context explicitly allows it.
-3. Write in the same language as the user unless instructed otherwise.
-4. For LinkedIn, use a professional and business-focused tone.
-5. For Instagram, use a short, visual, energetic tone.
-6. For Facebook, use a friendly and direct tone.
-7. For Google Ads, keep copy concise and conversion-focused.
-8. Always provide at least 2 A/B variants when generating ads.
+3. Do not invent customer counts, percentages, time-saved claims, ROI claims, guarantees, trials,
+   testimonials, or proof points unless they are explicitly present in the user request or RAG context.
+4. If proof is limited, use qualitative trust language instead of numbers.
+5. Keep CTA aligned with the actual offer. Do not invent "free trial", "demo", "guarantee", or
+   discount language unless it is grounded in context.
+6. Write in the same language as the user unless instructed otherwise.
+7. For LinkedIn, use a professional and business-focused tone.
+8. For Instagram, use a short, visual, energetic tone.
+9. For Facebook, use a friendly and direct tone.
+10. For Google Ads, keep copy concise and conversion-focused.
+11. Always provide at least 2 A/B variants when generating ads.
 """.strip()
 
 
@@ -143,6 +148,11 @@ class CreativeCopywritingAgent:
 
                         Return only valid JSON with keys:
                         headline, primary_text, description, slogan, cta, hashtags, ab_variants
+
+                        Safety requirements:
+                        - Do not invent numbers, percentages, customer counts, guarantees, or offers.
+                        - Keep proof language qualitative unless the context explicitly provides the proof.
+                        - Keep the CTA commercially aligned with the grounded offer.
                         """
                     ).strip(),
                 ),

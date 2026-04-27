@@ -36,6 +36,7 @@ def run_assistant(request: AssistantRequest, service: CampaignServiceDep) -> Ass
         save_output=request.save_output,
         export_report=request.export_report,
         use_web_search=request.use_web_search,
+        min_answer_words=request.min_answer_words,
     )
 
 

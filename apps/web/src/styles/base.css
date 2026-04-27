@@ -14,6 +14,10 @@ body {
   font-family: "IBM Plex Sans", sans-serif;
   color: var(--ink);
   background: var(--bg);
+  background-image:
+    radial-gradient(circle at top left, rgba(187, 104, 69, 0.1), transparent 28%),
+    radial-gradient(circle at top right, rgba(23, 109, 103, 0.12), transparent 34%),
+    linear-gradient(180deg, #f7f2e9 0%, #f3ece2 100%);
 }
 
 body::before {
@@ -22,9 +26,22 @@ body::before {
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(149, 199, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(183, 166, 255, 0.045) 1px, transparent 1px);
-  background-size: 46px 46px;
+    linear-gradient(rgba(26, 38, 40, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(26, 38, 40, 0.025) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent 82%);
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 14% 18%, rgba(255, 255, 255, 0.72), transparent 18%),
+    radial-gradient(circle at 85% 22%, rgba(255, 255, 255, 0.45), transparent 20%),
+    radial-gradient(circle at 50% 100%, rgba(255, 255, 255, 0.34), transparent 28%);
+  opacity: 0.75;
 }
 
 button,
@@ -37,4 +54,8 @@ textarea {
 img {
   display: block;
   max-width: 100%;
+}
+
+a {
+  color: inherit;
 }

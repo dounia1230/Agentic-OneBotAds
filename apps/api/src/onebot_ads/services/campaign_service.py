@@ -43,6 +43,7 @@ class CampaignService:
         save_output: bool = False,
         export_report: bool = False,
         use_web_search: bool = False,
+        min_answer_words: int | None = None,
     ) -> AssistantResponse:
         result = self.orchestrator_agent.run(
             user_message,
@@ -56,6 +57,7 @@ class CampaignService:
             run_all_agents=run_all_agents,
             export_report=export_report,
             use_web_search=use_web_search,
+            min_answer_words=min_answer_words,
         )
         result.artifact_paths = self._collect_artifact_paths(result)
 

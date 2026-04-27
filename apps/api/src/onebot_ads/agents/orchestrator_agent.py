@@ -93,6 +93,7 @@ class RequestContext:
     wants_report_export: bool
     run_all_agents: bool
     use_web_search: bool
+    min_answer_words: int | None
 
 
 class OrchestratorAgent:
@@ -126,6 +127,7 @@ class OrchestratorAgent:
         run_all_agents: bool = False,
         export_report: bool = False,
         use_web_search: bool = False,
+        min_answer_words: int | None = None,
     ) -> AssistantResponse:
         context = self._build_request_context(
             user_message,
@@ -139,6 +141,7 @@ class OrchestratorAgent:
             run_all_agents=run_all_agents,
             export_report=export_report,
             use_web_search=use_web_search,
+            min_answer_words=min_answer_words,
         )
         plan = self._build_plan(
             context.intent,
@@ -161,6 +164,7 @@ class OrchestratorAgent:
                 user_message,
                 knowledge_scope=context.knowledge_scope,
                 use_web_search=context.use_web_search,
+                min_answer_words=context.min_answer_words,
             )
             response.rag = rag_result
         if "analyst_agent" in plan.agents_to_call:
@@ -318,6 +322,7 @@ class OrchestratorAgent:
         run_all_agents: bool = False,
         export_report: bool = False,
         use_web_search: bool = False,
+        min_answer_words: int | None = None,
     ) -> RequestContext:
         message = user_message.lower()
         intent = "ad_copy"
@@ -382,6 +387,7 @@ class OrchestratorAgent:
             ),
             run_all_agents=run_all_agents,
             use_web_search=use_web_search,
+            min_answer_words=min_answer_words,
         )
 
     @staticmethod
@@ -402,13 +408,12 @@ class OrchestratorAgent:
     def _build_brand_context(rag_result) -> str | None:
         if rag_result is None:
             return None
-        fragments = []
-        if rag_result.answer:
-            fragments.append(rag_result.answer)
-        fragments.extend(rag_result.relevant_context[:2])
-        return " ".join(
-            dict.fromkeys(fragment.strip() for fragment in fragments if fragment.strip())
-        )
+        fragments = [fragment.strip() for fragment in rag_result.relevant_context[:3] if fragment.strip()]
+        if not fragments and rag_result.answer:
+            fragments.append(rag_result.answer.strip()[:320])
+        if not fragments:
+            return None
+        return " ".join(dict.fromkeys(fragments))
 
     @staticmethod
     def _build_performance_context(analysis_result) -> list[str]:

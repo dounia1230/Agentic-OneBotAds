@@ -1,12 +1,21 @@
+export type ConversationTurn = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 export type AssistantRequest = {
   message: string;
   product_name?: string;
+  company_name?: string;
+  company_website?: string;
   audience?: string;
   goal?: string;
   platform?: string;
   campaign_csv_content?: string;
   campaign_csv_filename?: string;
   knowledge_scope?: KnowledgeScope;
+  conversation_history?: ConversationTurn[];
+  knowledge_base_only?: boolean;
   run_all_agents?: boolean;
   save_output?: boolean;
   export_report?: boolean;

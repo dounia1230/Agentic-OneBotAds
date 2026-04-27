@@ -801,9 +801,12 @@ export function PublicationGeneratorTab() {
       runAssistant({
         message: buildPublicationRequestMessage(form),
         product_name: form.productName,
+        company_name: form.companyName || undefined,
+        company_website: form.companyWebsite || undefined,
         audience: form.audience,
         goal: form.goal,
         platform: form.platform,
+        use_web_search: form.useCompanyResearch,
       }),
       draftCampaign(buildCampaignDraftPayload(form)),
     ]);
@@ -889,6 +892,26 @@ export function PublicationGeneratorTab() {
                 </label>
 
                 <label>
+                  Company Name
+                  <input
+                    name="companyName"
+                    value={form.companyName}
+                    onChange={handleFieldChange}
+                    placeholder="Optional: company to research"
+                  />
+                </label>
+
+                <label className="span-two">
+                  Company Website
+                  <input
+                    name="companyWebsite"
+                    value={form.companyWebsite}
+                    onChange={handleFieldChange}
+                    placeholder="Optional: https://company.com"
+                  />
+                </label>
+
+                <label>
                   Platform
                   <select name="platform" value={form.platform} onChange={handleFieldChange} required>
                     {PLATFORM_OPTIONS.map((platform) => (
@@ -909,6 +932,16 @@ export function PublicationGeneratorTab() {
                   <input name="goal" value={form.goal} onChange={handleFieldChange} required />
                 </label>
               </div>
+
+              <label className="checkbox-row">
+                <input
+                  name="useCompanyResearch"
+                  type="checkbox"
+                  checked={form.useCompanyResearch}
+                  onChange={handleFieldChange}
+                />
+                Use live web research for the company when generating publication ideas.
+              </label>
 
               <label className="checkbox-row">
                 <input

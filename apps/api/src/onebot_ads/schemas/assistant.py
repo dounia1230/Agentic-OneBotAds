@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from onebot_ads.schemas.knowledge import KnowledgeScope
@@ -9,15 +11,24 @@ class OrchestrationPlan(BaseModel):
     final_format: str
 
 
+class ConversationTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=6000)
+
+
 class AssistantRequest(BaseModel):
     message: str = Field(min_length=3)
     product_name: str | None = Field(default=None, max_length=120)
+    company_name: str | None = Field(default=None, max_length=160)
+    company_website: str | None = Field(default=None, max_length=500)
     audience: str | None = Field(default=None, max_length=240)
     goal: str | None = Field(default=None, max_length=240)
     platform: str | None = Field(default=None, max_length=80)
     campaign_csv_content: str | None = None
     campaign_csv_filename: str | None = Field(default=None, max_length=240)
     knowledge_scope: KnowledgeScope | None = None
+    conversation_history: list[ConversationTurn] = Field(default_factory=list)
+    knowledge_base_only: bool = False
     run_all_agents: bool = False
     save_output: bool = False
     export_report: bool = False

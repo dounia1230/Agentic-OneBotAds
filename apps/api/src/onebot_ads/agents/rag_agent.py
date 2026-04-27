@@ -1,11 +1,12 @@
 import re
 from pathlib import Path
 from textwrap import dedent
+from urllib.parse import urlparse
 
 from onebot_ads.agents._llm import build_chat_model, extract_json_payload
 from onebot_ads.core.config import Settings
 from onebot_ads.rag.knowledge_base import KnowledgeBaseService
-from onebot_ads.schemas.campaigns import RAGAgentResponse
+from onebot_ads.schemas.campaigns import ConversationTurn, RAGAgentResponse
 from onebot_ads.schemas.knowledge import KnowledgeScope
 
 SYSTEM_PROMPT = """
@@ -56,11 +57,16 @@ class RAGMarketingKnowledgeAgent:
         self,
         question: str,
         knowledge_scope: KnowledgeScope | None = None,
+        conversation_history: list[ConversationTurn] | None = None,
+        company_name: str | None = None,
+        company_website: str | None = None,
         use_web_search: bool = False,
         min_answer_words: int | None = None,
     ) -> RAGAgentResponse:
+        conversation_history = conversation_history or []
+        retrieval_query = self._build_retrieval_query(question, conversation_history)
         snippets = self.knowledge_base.retrieve(
-            question,
+            retrieval_query,
             top_k=self._resolve_top_k(min_answer_words, use_web_search),
             scope=knowledge_scope,
         )
@@ -71,7 +77,13 @@ class RAGMarketingKnowledgeAgent:
                 if not self.settings.serpapi_api_key:
                     raise ValueError("SERPAPI_API_KEY is missing")
                 search = SerpAPIWrapper(serpapi_api_key=self.settings.serpapi_api_key)
-                search_result = search.run(question)
+                search_query = self._build_web_search_query(
+                    question,
+                    company_name=company_name,
+                    company_website=company_website,
+                    conversation_history=conversation_history,
+                )
+                search_result = search.run(search_query)
                 if isinstance(search_result, str) and search_result.startswith("[") and search_result.endswith("]"):
                     import ast
                     try:
@@ -100,7 +112,12 @@ class RAGMarketingKnowledgeAgent:
         if self.settings.enable_live_llm:
             try:
                 return self._sanitize_response(
-                    self._summarize_with_llm(question, snippets, min_answer_words)
+                    self._summarize_with_llm(
+                        question,
+                        snippets,
+                        min_answer_words,
+                        conversation_history=conversation_history,
+                    )
                 )
             except Exception as e:
                 import logging
@@ -110,6 +127,7 @@ class RAGMarketingKnowledgeAgent:
                         self._summarize_with_plain_llm(
                             question,
                             snippets,
+                            conversation_history=conversation_history,
                             min_answer_words=min_answer_words,
                         )
                     )
@@ -134,7 +152,14 @@ class RAGMarketingKnowledgeAgent:
             )
         )
 
-    def _summarize_with_llm(self, question: str, snippets, min_answer_words: int | None) -> RAGAgentResponse:
+    def _summarize_with_llm(
+        self,
+        question: str,
+        snippets,
+        min_answer_words: int | None,
+        *,
+        conversation_history: list[ConversationTurn],
+    ) -> RAGAgentResponse:
         from langchain_core.prompts import ChatPromptTemplate
 
         prompt = ChatPromptTemplate.from_messages(
@@ -145,6 +170,9 @@ class RAGMarketingKnowledgeAgent:
                     dedent(
                         """
                         Question: {question}
+
+                        Conversation history:
+                        {conversation_history}
 
                         Retrieved snippets:
                         {snippets}
@@ -174,6 +202,7 @@ class RAGMarketingKnowledgeAgent:
         response = llm.invoke(
             prompt.format_messages(
                 question=question,
+                conversation_history=self._format_conversation_history(conversation_history),
                 snippets="\n".join(f"- {item.source}: {item.excerpt}" for item in snippets),
                 min_answer_words=(
                     str(min_answer_words) if min_answer_words is not None else "not specified"
@@ -188,6 +217,7 @@ class RAGMarketingKnowledgeAgent:
         question: str,
         snippets,
         *,
+        conversation_history: list[ConversationTurn],
         min_answer_words: int | None,
     ) -> RAGAgentResponse:
         from langchain_core.prompts import ChatPromptTemplate
@@ -202,6 +232,9 @@ class RAGMarketingKnowledgeAgent:
                     dedent(
                         """
                         Question: {question}
+
+                        Conversation history:
+                        {conversation_history}
 
                         Retrieved snippets:
                         {snippets}
@@ -230,6 +263,7 @@ class RAGMarketingKnowledgeAgent:
         response = llm.invoke(
             prompt.format_messages(
                 question=question,
+                conversation_history=self._format_conversation_history(conversation_history),
                 snippets="\n".join(f"- {item.source}: {item.excerpt}" for item in snippets),
                 min_answer_words=(
                     str(min_answer_words) if min_answer_words is not None else "not specified"
@@ -457,6 +491,87 @@ class RAGMarketingKnowledgeAgent:
                     break
 
         return "\n".join(lines)
+
+    @staticmethod
+    def _build_retrieval_query(
+        question: str,
+        conversation_history: list[ConversationTurn],
+    ) -> str:
+        if not conversation_history:
+            return question
+
+        recent_turns = conversation_history[-6:]
+        history_lines = [
+            f"{turn.role.title()}: {turn.content.strip()}"
+            for turn in recent_turns
+            if turn.content.strip()
+        ]
+        history_lines.append(f"Current user question: {question.strip()}")
+        return "\n".join(history_lines)
+
+    @staticmethod
+    def _build_web_search_query(
+        question: str,
+        *,
+        company_name: str | None,
+        company_website: str | None,
+        conversation_history: list[ConversationTurn],
+    ) -> str:
+        if not company_name and not company_website:
+            return question
+
+        parts = [
+            "Research this company for current publication and ad-copy planning.",
+        ]
+        if company_name:
+            parts.append(f'Company name: "{company_name}".')
+        website_domain = RAGMarketingKnowledgeAgent._extract_website_domain(company_website)
+        if website_domain:
+            parts.append(f"Website domain: {website_domain}.")
+            parts.append(f"Search with site:{website_domain} when helpful.")
+        elif company_website:
+            parts.append(f"Website: {company_website}.")
+
+        if conversation_history:
+            latest_user_turns = [
+                turn.content.strip()
+                for turn in conversation_history[-4:]
+                if turn.role == "user" and turn.content.strip()
+            ]
+            if latest_user_turns:
+                parts.append("Recent user context: " + " | ".join(latest_user_turns) + ".")
+
+        parts.append(f"Current request: {question.strip()}.")
+        parts.append(
+            "Find current company positioning, products or services, ideal customers, tone of voice, "
+            "recent launches or news, social messaging themes, and concrete publication angles. "
+            "Avoid stock price or unrelated investor detail unless the request needs it."
+        )
+        return " ".join(parts)
+
+    @staticmethod
+    def _extract_website_domain(company_website: str | None) -> str | None:
+        if not company_website:
+            return None
+        candidate = company_website.strip()
+        if not candidate:
+            return None
+        parsed = urlparse(candidate if "://" in candidate else f"https://{candidate}")
+        domain = parsed.netloc.strip().lower()
+        if domain.startswith("www."):
+            domain = domain[4:]
+        return domain or None
+
+    @staticmethod
+    def _format_conversation_history(conversation_history: list[ConversationTurn]) -> str:
+        if not conversation_history:
+            return "No prior conversation."
+        recent_turns = conversation_history[-8:]
+        return "\n".join(
+            f"{turn.role.title()}: {turn.content.strip()}"
+            for turn in recent_turns
+            if turn.content.strip()
+        )
 
     @staticmethod
     def _sanitize_answer_text(answer: str) -> str:

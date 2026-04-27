@@ -11,7 +11,11 @@ from onebot_ads.agents.rag_agent import RAGMarketingKnowledgeAgent
 from onebot_ads.agents.reporting_agent import ReportingAgent
 from onebot_ads.core.config import Settings
 from onebot_ads.rag.knowledge_base import KnowledgeBaseService
-from onebot_ads.schemas.campaigns import AssistantResponse, OrchestrationPlan
+from onebot_ads.schemas.campaigns import (
+    AssistantResponse,
+    ConversationTurn,
+    OrchestrationPlan,
+)
 from onebot_ads.schemas.knowledge import KnowledgeScope
 
 SYSTEM_PROMPT = """
@@ -85,12 +89,16 @@ class RequestContext:
     tone: str
     goal: str
     product_name: str
+    company_name: str | None
+    company_website: str | None
     knowledge_scope: KnowledgeScope | None
+    conversation_history: list[ConversationTurn]
     campaign_csv_content: str | None
     campaign_csv_filename: str | None
     wants_image_prompt: bool
     wants_image_generation: bool
     wants_report_export: bool
+    knowledge_base_only: bool
     run_all_agents: bool
     use_web_search: bool
     min_answer_words: int | None
@@ -118,12 +126,16 @@ class OrchestratorAgent:
         user_message: str,
         *,
         product_name: str | None = None,
+        company_name: str | None = None,
+        company_website: str | None = None,
         audience: str | None = None,
         goal: str | None = None,
         platform: str | None = None,
         knowledge_scope: KnowledgeScope | None = None,
+        conversation_history: list[ConversationTurn] | None = None,
         campaign_csv_content: str | None = None,
         campaign_csv_filename: str | None = None,
+        knowledge_base_only: bool = False,
         run_all_agents: bool = False,
         export_report: bool = False,
         use_web_search: bool = False,
@@ -132,12 +144,16 @@ class OrchestratorAgent:
         context = self._build_request_context(
             user_message,
             product_name=product_name,
+            company_name=company_name,
+            company_website=company_website,
             audience=audience,
             goal=goal,
             platform=platform,
             knowledge_scope=knowledge_scope,
+            conversation_history=conversation_history,
             campaign_csv_content=campaign_csv_content,
             campaign_csv_filename=campaign_csv_filename,
+            knowledge_base_only=knowledge_base_only,
             run_all_agents=run_all_agents,
             export_report=export_report,
             use_web_search=use_web_search,
@@ -163,6 +179,9 @@ class OrchestratorAgent:
             rag_result = self.rag_agent.run(
                 user_message,
                 knowledge_scope=context.knowledge_scope,
+                conversation_history=context.conversation_history,
+                company_name=context.company_name,
+                company_website=context.company_website,
                 use_web_search=context.use_web_search,
                 min_answer_words=context.min_answer_words,
             )
@@ -313,12 +332,16 @@ class OrchestratorAgent:
         user_message: str,
         *,
         product_name: str | None = None,
+        company_name: str | None = None,
+        company_website: str | None = None,
         audience: str | None = None,
         goal: str | None = None,
         platform: str | None = None,
         knowledge_scope: KnowledgeScope | None = None,
+        conversation_history: list[ConversationTurn] | None = None,
         campaign_csv_content: str | None = None,
         campaign_csv_filename: str | None = None,
+        knowledge_base_only: bool = False,
         run_all_agents: bool = False,
         export_report: bool = False,
         use_web_search: bool = False,
@@ -326,7 +349,9 @@ class OrchestratorAgent:
     ) -> RequestContext:
         message = user_message.lower()
         intent = "ad_copy"
-        if "report" in message:
+        if knowledge_base_only:
+            intent = "brand_advice"
+        elif "report" in message:
             intent = "full_report"
         elif any(token in message for token in ["optimiz", "budget", "improve spend"]):
             intent = "optimization"
@@ -374,7 +399,12 @@ class OrchestratorAgent:
             tone="professional, modern, direct",
             goal=resolved_goal or default_goal,
             product_name=product_name or "Agentic OneBotAds",
+            company_name=company_name.strip() if company_name and company_name.strip() else None,
+            company_website=(
+                company_website.strip() if company_website and company_website.strip() else None
+            ),
             knowledge_scope=knowledge_scope,
+            conversation_history=conversation_history or [],
             campaign_csv_content=campaign_csv_content,
             campaign_csv_filename=campaign_csv_filename,
             wants_image_prompt=wants_image_prompt,
@@ -385,6 +415,7 @@ class OrchestratorAgent:
                 or "export" in message
                 or "file" in message
             ),
+            knowledge_base_only=knowledge_base_only,
             run_all_agents=run_all_agents,
             use_web_search=use_web_search,
             min_answer_words=min_answer_words,

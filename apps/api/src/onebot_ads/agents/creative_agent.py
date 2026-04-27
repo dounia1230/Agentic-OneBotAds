@@ -44,6 +44,12 @@ Rules:
 """.strip()
 
 
+def _format_exception_details(exc: Exception) -> str:
+    exception_name = type(exc).__name__
+    exception_message = str(exc).strip()
+    return f"{exception_name}: {exception_message}" if exception_message else exception_name
+
+
 class CreativeCopywritingAgent:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -59,19 +65,52 @@ class CreativeCopywritingAgent:
         tone: str,
         rag_context: RAGAgentResponse | None = None,
     ) -> CreativeCopyResponse:
+        response, _, _ = self.generate_with_mode(
+            user_request=user_request,
+            platform=platform,
+            audience=audience,
+            goal=goal,
+            product_name=product_name,
+            tone=tone,
+            rag_context=rag_context,
+        )
+        return response
+
+    def generate_with_mode(
+        self,
+        *,
+        user_request: str,
+        platform: str,
+        audience: str,
+        goal: str,
+        product_name: str,
+        tone: str,
+        rag_context: RAGAgentResponse | None = None,
+    ) -> tuple[CreativeCopyResponse, str, str | None]:
         if self.settings.enable_live_llm:
             try:
-                return self._generate_with_llm(
-                    user_request=user_request,
-                    platform=platform,
-                    audience=audience,
-                    goal=goal,
-                    product_name=product_name,
-                    tone=tone,
-                    rag_context=rag_context,
+                return (
+                    self._generate_with_llm(
+                        user_request=user_request,
+                        platform=platform,
+                        audience=audience,
+                        goal=goal,
+                        product_name=product_name,
+                        tone=tone,
+                        rag_context=rag_context,
+                    ),
+                    "live_llm",
+                    None,
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                warning = (
+                    "Live LLM creative generation failed; deterministic fallback returned: "
+                    f"{_format_exception_details(exc)}"
+                )
+            else:
+                warning = None
+        else:
+            warning = None
 
         platform_name = normalize_platform(platform)
         context_line = (
@@ -93,29 +132,33 @@ class CreativeCopywritingAgent:
             "Google Ads": "Start optimizing today",
         }.get(platform_name, "Start optimizing today")
         hashtags = build_hashtags(product_name, platform_name)
-        return CreativeCopyResponse(
-            headline=headline,
-            primary_text=primary_text,
-            description=description,
-            slogan=slogan,
-            cta=cta,
-            hashtags=hashtags,
-            ab_variants=[
-                ABVariant(
-                    headline=f"Turn campaign data into better ads with {product_name}",
-                    primary_text=(
-                        f"Give {audience} a faster route to stronger performance insights and "
-                        "publication-ready copy."
+        return (
+            CreativeCopyResponse(
+                headline=headline,
+                primary_text=primary_text,
+                description=description,
+                slogan=slogan,
+                cta=cta,
+                hashtags=hashtags,
+                ab_variants=[
+                    ABVariant(
+                        headline=f"Turn campaign data into better ads with {product_name}",
+                        primary_text=(
+                            f"Give {audience} a faster route to stronger performance insights and "
+                            "publication-ready copy."
+                        ),
                     ),
-                ),
-                ABVariant(
-                    headline=f"Your AI assistant for {platform_name} advertising",
-                    primary_text=(
-                        f"Create, review, and optimize campaigns with grounded brand context and a "
-                        f"{tone} tone."
+                    ABVariant(
+                        headline=f"Your AI assistant for {platform_name} advertising",
+                        primary_text=(
+                            f"Create, review, and optimize campaigns with grounded brand context and a "
+                            f"{tone} tone."
+                        ),
                     ),
-                ),
-            ],
+                ],
+            ),
+            "fallback",
+            warning,
         )
 
     def _generate_with_llm(

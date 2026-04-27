@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from onebot_ads.core.config import Settings
-from onebot_ads.schemas.campaigns import ContextSnippet
+from onebot_ads.schemas.campaigns import ContextSnippet, ConversationTurn
 from onebot_ads.services.campaign_service import CampaignService
 
 
@@ -110,3 +110,26 @@ def test_assistant_image_prompt_language_triggers_real_image_generation(
     assert result.image is not None
     assert result.image.status == "generated"
     assert captured["request_image_generation"] is True
+
+
+def test_assistant_knowledge_base_only_routes_follow_up_to_rag() -> None:
+    settings = Settings(enable_live_llm=False, enable_rag=True, enable_image_generation=False)
+    service = CampaignService(settings, knowledge_base=StubKnowledgeBase())
+
+    result = service.handle_request(
+        "What about the offer?",
+        knowledge_base_only=True,
+        conversation_history=[
+            ConversationTurn(role="user", content="How should I position Agentic OneBotAds?"),
+            ConversationTurn(
+                role="assistant",
+                content="Position it as an AI-powered advertising co-pilot for SMEs.",
+            ),
+        ],
+        min_answer_words=300,
+    )
+
+    assert result.intent == "brand_advice"
+    assert result.rag is not None
+    assert result.creative is None
+    assert result.plan.agents_to_call == ["rag_agent"]

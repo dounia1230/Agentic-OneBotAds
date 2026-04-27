@@ -1,10 +1,7 @@
-import json
 import re
 from pathlib import Path
-from textwrap import dedent
 
-from pydantic import BaseModel, Field
-
+from onebot_ads.agents.creative_agent import CreativeCopywritingAgent
 from onebot_ads.core.config import Settings
 from onebot_ads.rag.knowledge_base import KnowledgeBaseService
 from onebot_ads.schemas.campaigns import (
@@ -13,9 +10,10 @@ from onebot_ads.schemas.campaigns import (
     CampaignDraftResponse,
     ContextSnippet,
     ImagePrompt,
+    RAGAgentResponse,
 )
 from onebot_ads.schemas.knowledge import KnowledgeScope
-from onebot_ads.tools.channel_guidance import build_channel_guidance, build_default_cta
+from onebot_ads.tools.channel_guidance import build_channel_guidance
 from onebot_ads.tools.image_composer import compose_publication_image
 from onebot_ads.tools.image_tools import (
     build_publication_background_prompt,
@@ -46,24 +44,11 @@ def _format_exception_details(exc: Exception) -> str:
     return f"{exception_name}: {exception_message}" if exception_message else exception_name
 
 
-class _DraftVariantPayload(BaseModel):
-    channel: str
-    headline: str
-    primary_text: str
-    cta: str
-    rationale: str
-
-
-class _DraftPayload(BaseModel):
-    summary: str = Field(min_length=10)
-    variants: list[_DraftVariantPayload]
-    image_prompt: str | None = None
-
-
 class CampaignCopyAgent:
     def __init__(self, settings: Settings, knowledge_base: KnowledgeBaseService) -> None:
         self.settings = settings
         self.knowledge_base = knowledge_base
+        self.creative_agent = CreativeCopywritingAgent(settings)
 
     def draft(self, brief: CampaignBrief) -> CampaignDraftResponse:
         warnings: list[str] = []
@@ -73,17 +58,7 @@ class CampaignCopyAgent:
                 "Draft context query returned no snippets; fallback copy used only the brief."
             )
 
-        if self.settings.enable_live_llm:
-            try:
-                response = self._draft_with_live_llm(brief, context, warnings)
-                return self._finalize_draft_response(response, brief, context, warnings)
-            except Exception as exc:
-                warnings.append(
-                    "Live LLM draft path failed; deterministic fallback returned: "
-                    f"{_format_exception_details(exc)}"
-                )
-
-        response = self._draft_fallback(brief, context, warnings)
+        response = self._draft_with_creative_agent(brief, context, warnings)
         return self._finalize_draft_response(response, brief, context, warnings)
 
     def _retrieve_context(self, brief: CampaignBrief) -> list[ContextSnippet]:
@@ -103,171 +78,63 @@ class CampaignCopyAgent:
             )
         return self.knowledge_base.retrieve(query=query, top_k=3, scope=scope)
 
-    def _draft_with_live_llm(
-        self,
-        brief: CampaignBrief,
-        context: list[ContextSnippet],
-        warnings: list[str],
-    ) -> CampaignDraftResponse:
-        from langchain_core.prompts import ChatPromptTemplate
-        from langchain_ollama import ChatOllama
-
-        llm = ChatOllama(
-            model=self.settings.ollama_chat_model,
-            base_url=self.settings.ollama_base_url,
-            temperature=self.settings.llm_temperature,
-            num_predict=800,
-            validate_model_on_init=False,
-        )
-
-        prompt = ChatPromptTemplate.from_messages(
-            [
-                (
-                    "system",
-                    dedent(
-                        """
-                        You are a senior performance marketer.
-                        Return only valid JSON with this shape:
-                        {{
-                          "summary": "string",
-                          "variants": [
-                            {{
-                              "channel": "string",
-                              "headline": "string",
-                              "primary_text": "string",
-                              "cta": "string",
-                              "rationale": "string"
-                            }}
-                          ],
-                          "image_prompt": "string or null"
-                        }}
-                        Keep copy concrete, conversion-focused, and compliant with
-                        the provided constraints.
-                        """
-                    ).strip(),
-                ),
-                (
-                    "human",
-                    dedent(
-                        """
-                        Campaign brief:
-                        {brief_json}
-
-                        Channel guidance:
-                        {guidance_json}
-
-                        Retrieved context:
-                        {context_json}
-
-                        Generate one strong ad variant per requested channel.
-                        """
-                    ).strip(),
-                ),
-            ]
-        )
-
-        response = llm.invoke(
-            prompt.format_messages(
-                brief_json=json.dumps(brief.model_dump(mode="json"), indent=2),
-                guidance_json=json.dumps(build_channel_guidance(brief.channels), indent=2),
-                context_json=json.dumps([item.model_dump() for item in context], indent=2),
-            )
-        )
-        content = getattr(response, "content", str(response))
-        payload = _DraftPayload.model_validate(self._extract_json_payload(content))
-
-        variants = [
-            AdVariant(
-                channel=variant.channel,
-                headline=variant.headline,
-                primary_text=variant.primary_text,
-                cta=variant.cta,
-                rationale=variant.rationale,
-            )
-            for variant in payload.variants
-        ]
-
-        if not variants:
-            raise ValueError("No variants returned by the model.")
-
-        image_prompt = (
-            ImagePrompt(prompt=payload.image_prompt, provider=self.settings.image_provider)
-            if payload.image_prompt
-            else None
-        )
-
-        return CampaignDraftResponse(
-            provider="ollama",
-            mode="live_llm",
-            summary=payload.summary,
-            variants=variants,
-            image_prompt=image_prompt,
-            used_context=context,
-            warnings=warnings,
-        )
-
-    def _draft_fallback(
+    def _draft_with_creative_agent(
         self,
         brief: CampaignBrief,
         context: list[ContextSnippet],
         warnings: list[str],
     ) -> CampaignDraftResponse:
         guidance = build_channel_guidance(brief.channels)
-        signal = (
-            brief.key_points[:2]
-            if brief.key_points
-            else ["channel-ready drafts", "local-first workflow"]
-        )
         context_sources = (
             ", ".join(item.source for item in context[:2]) if context else "the base brief"
         )
-
+        rag_context = self._build_rag_context(context)
         variants: list[AdVariant] = []
+        mode = "fallback"
+
         for channel in brief.channels:
             rule = guidance.get(channel, guidance["default"])
-            headline = f"{brief.product_name}: faster {brief.goal.lower()} for {brief.audience}"
-            primary_text = (
-                f"{brief.product_name} helps {brief.audience} move from idea to launch-ready ads "
-                f"with {signal[0]} and {signal[-1]}. "
-                f"Offer: {brief.offer or 'a focused pilot campaign'}."
+            creative_response, creative_mode, creative_warning = (
+                self.creative_agent.generate_with_mode(
+                    user_request=self._build_channel_request(brief, channel, rule),
+                    platform=self._channel_to_platform(channel),
+                    audience=brief.audience,
+                    goal=brief.goal,
+                    product_name=brief.product_name,
+                    tone=brief.tone,
+                    rag_context=rag_context,
+                )
             )
+            if creative_mode == "live_llm":
+                mode = "live_llm"
+            if creative_warning and creative_warning not in warnings:
+                warnings.append(creative_warning)
+
             rationale = (
-                f"Optimized for {channel} with emphasis on {rule['copy_goal']} and guidance from "
-                f"{context_sources}."
+                f"Optimized for {channel} with emphasis on {rule['copy_goal']}. "
+                f"Format guidance: {rule['format_hint']} "
+                f"Grounded in {context_sources}."
             )
             variants.append(
                 AdVariant(
                     channel=channel,
-                    headline=headline[:110],
-                    primary_text=primary_text,
-                    cta=build_default_cta(channel),
+                    headline=creative_response.headline[:110],
+                    primary_text=creative_response.primary_text,
+                    cta=creative_response.cta,
                     rationale=rationale,
                 )
             )
 
-        image_prompt = None
-        if brief.generate_image_prompt:
-            image_prompt = ImagePrompt(
-                prompt=(
-                    f"Create a campaign visual for {brief.product_name} aimed at {brief.audience}. "
-                    f"Style: modern editorial marketing, clear hierarchy, strong offer framing, "
-                    f"brand-safe and conversion-focused."
-                ),
-                provider=self.settings.image_provider,
-            )
-
         summary = (
             f"Drafted {len(variants)} channel variants for {brief.product_name} using "
-            "deterministic "
-            f"fallback logic and context from {context_sources}."
+            f"CreativeCopywritingAgent and context from {context_sources}."
         )
 
         return CampaignDraftResponse(
-            provider="fallback",
-            mode="fallback",
+            provider="ollama" if mode == "live_llm" else "fallback",
+            mode=mode,
             summary=summary,
             variants=variants,
-            image_prompt=image_prompt,
             used_context=context,
             warnings=warnings,
         )
@@ -450,9 +317,47 @@ class CampaignCopyAgent:
         return sanitized
 
     @staticmethod
-    def _extract_json_payload(raw: str) -> dict:
-        start = raw.find("{")
-        end = raw.rfind("}")
-        if start == -1 or end == -1 or start >= end:
-            raise ValueError("Model response did not contain a JSON object.")
-        return json.loads(raw[start : end + 1])
+    def _channel_to_platform(channel: str) -> str:
+        normalized = channel.strip().lower()
+        if normalized == "meta":
+            return "Facebook"
+        if normalized == "google":
+            return "Google Ads"
+        if normalized == "landing_page":
+            return "LinkedIn"
+        return normalized.replace("_", " ").title()
+
+    def _build_channel_request(
+        self,
+        brief: CampaignBrief,
+        channel: str,
+        guidance: dict[str, str],
+    ) -> str:
+        request_parts = [
+            f"Create a {channel} campaign draft for {brief.product_name}.",
+            f"Audience: {brief.audience}.",
+            f"Goal: {brief.goal}.",
+            f"Tone: {brief.tone}.",
+            f"Channel guidance: {guidance['format_hint']}",
+            f"Copy goal: {guidance['copy_goal']}.",
+        ]
+        if brief.offer:
+            request_parts.append(f"Offer: {brief.offer}.")
+        if brief.key_points:
+            request_parts.append("Key points: " + ", ".join(brief.key_points[:4]) + ".")
+        if brief.brand_constraints:
+            request_parts.append(
+                "Brand constraints: " + ", ".join(brief.brand_constraints[:4]) + "."
+            )
+        return " ".join(request_parts)
+
+    @staticmethod
+    def _build_rag_context(context: list[ContextSnippet]) -> RAGAgentResponse | None:
+        if not context:
+            return None
+        return RAGAgentResponse(
+            answer=" ".join(snippet.excerpt.strip() for snippet in context if snippet.excerpt.strip()),
+            relevant_context=[snippet.excerpt.strip() for snippet in context if snippet.excerpt.strip()],
+            source_documents=[snippet.source for snippet in context],
+            confidence="medium",
+        )

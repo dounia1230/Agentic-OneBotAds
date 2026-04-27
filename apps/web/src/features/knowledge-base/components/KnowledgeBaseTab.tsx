@@ -7,11 +7,23 @@ import {
   reindexKnowledgeBase,
   runAssistant,
 } from "../../../services/api/onebot";
-import type {
-  AssistantResponse,
-  HealthResponse,
-  RuntimeSummary,
-} from "../../../types/api";
+import type { ConversationTurn, HealthResponse, RuntimeSummary } from "../../../types/api";
+
+type KnowledgeChatTurn = {
+  id: string;
+  question: string;
+  answer?: string;
+  error?: string;
+  confidence?: string;
+};
+
+type KnowledgeChatStorage = {
+  conversation: KnowledgeChatTurn[];
+  useWebSearch: boolean;
+  longAnswer: boolean;
+};
+
+const KNOWLEDGE_CHAT_STORAGE_KEY = "onebotads.knowledge-chat";
 
 function ArrowUpIcon() {
   return (
@@ -24,12 +36,27 @@ function ArrowUpIcon() {
 
 function formatText(text: string) {
   const parts = text.split(/(\*\*.*?\*\*|`.*?`)/g);
-  return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={i} style={{ color: "var(--foreground)" }}>{part.slice(2, -2)}</strong>;
+  return parts.map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return (
+        <strong key={index} style={{ color: "var(--foreground)" }}>
+          {part.slice(2, -2)}
+        </strong>
+      );
     }
-    if (part.startsWith('`') && part.endsWith('`')) {
-      return <code key={i} style={{ backgroundColor: "var(--surface-sunken)", padding: "2px 4px", borderRadius: "4px" }}>{part.slice(1, -1)}</code>;
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return (
+        <code
+          key={index}
+          style={{
+            backgroundColor: "var(--surface-sunken)",
+            padding: "2px 4px",
+            borderRadius: "4px",
+          }}
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
     }
     return part;
   });
@@ -46,9 +73,9 @@ function renderKnowledgeAnswer(answer: string) {
   > = [];
 
   for (const line of lines) {
-    if (/^[-*•]\s+/.test(line)) {
+    if (/^[-*]\s+/.test(line)) {
       const previous = content[content.length - 1];
-      const item = line.replace(/^[-*•]\s+/, "").trim();
+      const item = line.replace(/^[-*]\s+/, "").trim();
       if (previous?.type === "list") {
         previous.items.push(item);
       } else {
@@ -73,7 +100,51 @@ function renderKnowledgeAnswer(answer: string) {
   );
 }
 
+function buildConversationHistory(turns: KnowledgeChatTurn[]): ConversationTurn[] {
+  return turns.flatMap((turn) => {
+    const history: ConversationTurn[] = [{ role: "user", content: turn.question }];
+    if (turn.answer) {
+      history.push({ role: "assistant", content: turn.answer });
+    }
+    return history;
+  });
+}
+
+function loadStoredKnowledgeChat(): KnowledgeChatStorage | null {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(KNOWLEDGE_CHAT_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as Partial<KnowledgeChatStorage>;
+    return {
+      conversation: Array.isArray(parsed.conversation) ? parsed.conversation : [],
+      useWebSearch: typeof parsed.useWebSearch === "boolean" ? parsed.useWebSearch : true,
+      longAnswer: typeof parsed.longAnswer === "boolean" ? parsed.longAnswer : true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function persistKnowledgeChat(payload: KnowledgeChatStorage) {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(KNOWLEDGE_CHAT_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore storage write failures to keep the chat usable.
+  }
+}
+
 export function KnowledgeBaseTab() {
+  const initialState = loadStoredKnowledgeChat();
   const composerRef = useRef<HTMLFormElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -81,25 +152,29 @@ export function KnowledgeBaseTab() {
   const previousComposerRectRef = useRef<DOMRect | null>(null);
   const previousButtonRectRef = useRef<DOMRect | null>(null);
   const [question, setQuestion] = useState("");
-  const [submittedQuestion, setSubmittedQuestion] = useState("");
-  const [useWebSearch, setUseWebSearch] = useState(true);
-  const [longAnswer, setLongAnswer] = useState(true);
-  const [response, setResponse] = useState<AssistantResponse | null>(null);
+  const [conversation, setConversation] = useState<KnowledgeChatTurn[]>(
+    initialState?.conversation ?? [],
+  );
+  const [useWebSearch, setUseWebSearch] = useState(initialState?.useWebSearch ?? true);
+  const [longAnswer, setLongAnswer] = useState(initialState?.longAnswer ?? true);
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [runtime, setRuntime] = useState<RuntimeSummary | null>(null);
   const [runtimeMessage, setRuntimeMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isReindexing, setIsReindexing] = useState(false);
 
   const hasQuestion = question.trim().length > 0;
-  const hasConversationStarted =
-    isSubmitting ||
-    submittedQuestion.trim().length > 0 ||
-    Boolean(response?.rag) ||
-    Boolean(error);
+  const hasConversationStarted = isSubmitting || conversation.length > 0;
 
-  useScrollIntoViewOnChange(resultsRef, response?.rag ?? error);
+  useScrollIntoViewOnChange(resultsRef, conversation);
+
+  useEffect(() => {
+    persistKnowledgeChat({
+      conversation,
+      useWebSearch,
+      longAnswer,
+    });
+  }, [conversation, useWebSearch, longAnswer]);
 
   useLayoutEffect(() => {
     const animateFlip = (
@@ -119,7 +194,16 @@ export function KnowledgeBaseTab() {
         const scaleX = previousRect.width / Math.max(nextRect.width, 1);
         const scaleY = previousRect.height / Math.max(nextRect.height, 1);
 
-        if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1 || Math.abs(scaleX - 1) > 0.01 || Math.abs(scaleY - 1) > 0.01) {
+        if (
+          Math.abs(deltaX) > 1 ||
+          Math.abs(deltaY) > 1 ||
+          Math.abs(scaleX - 1) > 0.01 ||
+          Math.abs(scaleY - 1) > 0.01
+        ) {
+          if (typeof element.animate !== "function") {
+            storeRect.current = nextRect;
+            return;
+          }
           element.animate(
             [
               {
@@ -205,21 +289,49 @@ export function KnowledgeBaseTab() {
       return;
     }
 
-    setError(null);
-    setResponse(null);
-    setSubmittedQuestion(nextQuestion);
+    const pendingTurn: KnowledgeChatTurn = {
+      id: `${Date.now()}-${conversation.length}`,
+      question: nextQuestion,
+    };
+    const conversationHistory = buildConversationHistory(conversation);
+
+    setConversation((current) => [...current, pendingTurn]);
     setQuestion("");
     setIsSubmitting(true);
 
     try {
-      const nextResponse = await runAssistant({ 
+      const nextResponse = await runAssistant({
         message: nextQuestion,
+        knowledge_base_only: true,
+        conversation_history: conversationHistory,
         use_web_search: useWebSearch,
         min_answer_words: longAnswer ? 800 : undefined,
       });
-      setResponse(nextResponse);
+      setConversation((current) =>
+        current.map((turn) =>
+          turn.id === pendingTurn.id
+            ? {
+                ...turn,
+                answer: nextResponse.rag?.answer ?? "No grounded answer was returned.",
+                confidence: nextResponse.rag?.confidence ?? "low",
+              }
+            : turn,
+        ),
+      );
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to query the knowledge base.");
+      setConversation((current) =>
+        current.map((turn) =>
+          turn.id === pendingTurn.id
+            ? {
+                ...turn,
+                error:
+                  submitError instanceof Error
+                    ? submitError.message
+                    : "Unable to query the knowledge base.",
+              }
+            : turn,
+        ),
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -234,7 +346,9 @@ export function KnowledgeBaseTab() {
       setRuntimeMessage(`Reindex complete: ${result.documents_indexed} documents`);
     } catch (reindexError) {
       setRuntimeMessage(
-        reindexError instanceof Error ? reindexError.message : "Unable to reindex the knowledge base.",
+        reindexError instanceof Error
+          ? reindexError.message
+          : "Unable to reindex the knowledge base.",
       );
     } finally {
       setIsReindexing(false);
@@ -248,7 +362,7 @@ export function KnowledgeBaseTab() {
       <div className="knowledge-chat-stage">
         <div className="knowledge-chat-shell">
           <header className={`knowledge-chat-header ${hasConversationStarted ? "is-hidden" : ""}`}>
-            <p className="eyebrow">Knowledge Base Q&A</p>
+            <p className="eyebrow">Knowledge Base Q&amp;A</p>
             <h2>Ask the local RAG workflow</h2>
           </header>
 
@@ -259,42 +373,69 @@ export function KnowledgeBaseTab() {
                 <p>{runtimeMessage ?? "Runtime ready"}</p>
                 {runtime ? (
                   <p>
-                    Index source: {runtime.knowledge_base_directory} • model: {runtime.ollama_embedding_model}
+                    Index source: {runtime.knowledge_base_directory} | model:{" "}
+                    {runtime.ollama_embedding_model}
                   </p>
                 ) : null}
               </div>
-              <button
-                className="secondary-action"
-                type="button"
-                onClick={() => {
-                  void handleReindex();
-                }}
-                disabled={isReindexing}
-              >
-                {isReindexing ? "Reindexing..." : "Reindex KB"}
-              </button>
+
+              <div style={{ display: "flex", gap: "12px" }}>
+                {conversation.length > 0 ? (
+                  <button
+                    className="secondary-action"
+                    type="button"
+                    onClick={() => setConversation([])}
+                  >
+                    New chat
+                  </button>
+                ) : null}
+
+                <button
+                  className="secondary-action"
+                  type="button"
+                  onClick={() => {
+                    void handleReindex();
+                  }}
+                  disabled={isReindexing}
+                >
+                  {isReindexing ? "Reindexing..." : "Reindex KB"}
+                </button>
+              </div>
             </div>
           ) : null}
 
-          {submittedQuestion || response?.rag || error ? (
+          {conversation.length > 0 ? (
             <div ref={resultsRef} className="knowledge-chat-results">
-              {submittedQuestion ? (
-                <article className="knowledge-chat-message knowledge-chat-message-user">
-                  <p>{submittedQuestion}</p>
-                </article>
-              ) : null}
+              {conversation.map((turn) => (
+                <div key={turn.id}>
+                  <article className="knowledge-chat-message knowledge-chat-message-user">
+                    <p>{turn.question}</p>
+                  </article>
 
-              {error ? (
-                <article className="knowledge-chat-error" role="alert">
-                  <p>{error}</p>
-                </article>
-              ) : null}
+                  {turn.error ? (
+                    <article className="knowledge-chat-error" role="alert">
+                      <p>{turn.error}</p>
+                    </article>
+                  ) : null}
 
-              {response?.rag ? (
-                <article className="knowledge-chat-answer-block">
-                  <div className="knowledge-chat-answer">{renderKnowledgeAnswer(response.rag.answer)}</div>
-                </article>
-              ) : null}
+                  {turn.answer ? (
+                    <article className="knowledge-chat-answer-block">
+                      <div className="knowledge-chat-answer">{renderKnowledgeAnswer(turn.answer)}</div>
+                      {turn.confidence ? (
+                        <p
+                          style={{
+                            marginTop: "12px",
+                            color: "var(--foreground-muted)",
+                            fontSize: "0.85rem",
+                          }}
+                        >
+                          Confidence: {turn.confidence}
+                        </p>
+                      ) : null}
+                    </article>
+                  ) : null}
+                </div>
+              ))}
             </div>
           ) : null}
         </div>
@@ -311,26 +452,54 @@ export function KnowledgeBaseTab() {
             onChange={(event) => setQuestion(event.target.value)}
             onKeyDown={handleQuestionKeyDown}
             rows={1}
-            placeholder="Question"
+            placeholder="Ask a grounded follow-up question"
             aria-label="Question"
           />
 
-          <div style={{ display: "flex", alignItems: "center", gap: "16px", alignSelf: "flex-end" }}>
-            <label style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--foreground-muted)", fontSize: "0.875rem", cursor: "pointer", userSelect: "none" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "16px",
+              alignSelf: "flex-end",
+              flexWrap: "wrap",
+            }}
+          >
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                color: "var(--foreground-muted)",
+                fontSize: "0.875rem",
+                cursor: "pointer",
+                userSelect: "none",
+              }}
+            >
               <input
                 type="checkbox"
                 checked={useWebSearch}
-                onChange={(e) => setUseWebSearch(e.target.checked)}
+                onChange={(event) => setUseWebSearch(event.target.checked)}
                 style={{ cursor: "pointer", width: "16px", height: "16px" }}
               />
               Web Search
             </label>
 
-            <label style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--foreground-muted)", fontSize: "0.875rem", cursor: "pointer", userSelect: "none" }}>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                color: "var(--foreground-muted)",
+                fontSize: "0.875rem",
+                cursor: "pointer",
+                userSelect: "none",
+              }}
+            >
               <input
                 type="checkbox"
                 checked={longAnswer}
-                onChange={(e) => setLongAnswer(e.target.checked)}
+                onChange={(event) => setLongAnswer(event.target.checked)}
                 style={{ cursor: "pointer", width: "16px", height: "16px" }}
               />
               Long answer (800+ words)
@@ -344,8 +513,14 @@ export function KnowledgeBaseTab() {
               aria-busy={isSubmitting}
               aria-label={isSubmitting ? "Asking" : hasConversationStarted ? "Ask question" : "Ask"}
             >
-              {isSubmitting ? <span className="button-spinner" aria-hidden="true" /> : hasConversationStarted ? <ArrowUpIcon /> : null}
-              <span className="knowledge-chat-submit-label">{isSubmitting ? "Asking..." : "Ask"}</span>
+              {isSubmitting ? (
+                <span className="button-spinner" aria-hidden="true" />
+              ) : hasConversationStarted ? (
+                <ArrowUpIcon />
+              ) : null}
+              <span className="knowledge-chat-submit-label">
+                {isSubmitting ? "Asking..." : "Ask"}
+              </span>
             </button>
           </div>
         </form>

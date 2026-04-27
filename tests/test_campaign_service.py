@@ -176,10 +176,10 @@ def test_campaign_service_reports_specific_live_llm_fallback_reason_once(monkeyp
     settings = Settings(enable_live_llm=True, enable_rag=True)
     service = CampaignService(settings, knowledge_base=StubKnowledgeBase())
 
-    def fail_live_draft(*args, **kwargs):
+    def fail_live_copy(*args, **kwargs):
         raise ValueError("Model response did not contain a JSON object.")
 
-    monkeypatch.setattr(service.campaign_agent, "_draft_with_live_llm", fail_live_draft)
+    monkeypatch.setattr(service.campaign_agent.creative_agent, "_generate_with_llm", fail_live_copy)
 
     result = service.draft_campaign(
         CampaignBrief(
@@ -191,7 +191,7 @@ def test_campaign_service_reports_specific_live_llm_fallback_reason_once(monkeyp
     )
 
     assert (
-        "Live LLM draft path failed; deterministic fallback returned: "
+        "Live LLM creative generation failed; deterministic fallback returned: "
         "ValueError: Model response did not contain a JSON object."
     ) in result.warnings
     assert not any("unavailable or not provisioned" in warning for warning in result.warnings)
@@ -338,10 +338,14 @@ def test_campaign_service_passes_min_answer_words_to_orchestrator(monkeypatch) -
 
     service.handle_request(
         "Give me a detailed answer about positioning.",
+        company_name="HubSpot",
+        company_website="https://www.hubspot.com",
         use_web_search=True,
         min_answer_words=800,
     )
 
     assert captured["user_message"] == "Give me a detailed answer about positioning."
+    assert captured["company_name"] == "HubSpot"
+    assert captured["company_website"] == "https://www.hubspot.com"
     assert captured["use_web_search"] is True
     assert captured["min_answer_words"] == 800

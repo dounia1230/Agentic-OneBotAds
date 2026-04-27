@@ -1,6 +1,6 @@
 from onebot_ads.agents.rag_agent import RAGMarketingKnowledgeAgent
 from onebot_ads.core.config import Settings
-from onebot_ads.schemas.campaigns import ContextSnippet, RAGAgentResponse
+from onebot_ads.schemas.campaigns import ContextSnippet, ConversationTurn, RAGAgentResponse
 
 
 class StubKnowledgeBase:
@@ -85,10 +85,22 @@ def test_rag_agent_uses_plain_llm_summary_when_json_summary_fails(monkeypatch) -
     settings = Settings(enable_live_llm=True, enable_rag=True)
     agent = RAGMarketingKnowledgeAgent(settings, StubKnowledgeBase())
 
-    def fail_json_summary(question: str, snippets, min_answer_words: int | None):
+    def fail_json_summary(
+        question: str,
+        snippets,
+        min_answer_words: int | None,
+        *,
+        conversation_history,
+    ):
         raise ValueError("Model response did not contain a JSON object.")
 
-    def plain_summary(question: str, snippets, *, min_answer_words: int | None) -> RAGAgentResponse:
+    def plain_summary(
+        question: str,
+        snippets,
+        *,
+        conversation_history,
+        min_answer_words: int | None,
+    ) -> RAGAgentResponse:
         return RAGAgentResponse(
             answer="Use a direct, proof-led positioning with a lower-friction CTA.",
             relevant_context=["Direct tone", "Proof-led messaging"],
@@ -102,3 +114,53 @@ def test_rag_agent_uses_plain_llm_summary_when_json_summary_fails(monkeypatch) -
     result = agent.run("How should I position this offer?", min_answer_words=1200)
 
     assert result.answer == "Use a direct, proof-led positioning with a lower-friction CTA."
+
+
+def test_rag_agent_uses_conversation_history_in_retrieval_query() -> None:
+    captured: dict[str, str] = {}
+
+    class CapturingKnowledgeBase:
+        def retrieve(self, query: str, top_k: int = 4, scope=None) -> list[ContextSnippet]:
+            captured["query"] = query
+            return [
+                ContextSnippet(
+                    source="pricing.md",
+                    excerpt="The recommended offer framing is discovery-first rather than discount-first.",
+                    score=0.91,
+                )
+            ]
+
+    settings = Settings(enable_live_llm=False, enable_rag=True)
+    agent = RAGMarketingKnowledgeAgent(settings, CapturingKnowledgeBase())
+
+    result = agent.run(
+        "What about the offer?",
+        conversation_history=[
+            ConversationTurn(role="user", content="How should I position Atlas Glow?"),
+            ConversationTurn(
+                role="assistant",
+                content="Lead with premium skincare ritual language and keep the tone grounded.",
+            ),
+        ],
+    )
+
+    assert "How should I position Atlas Glow?" in captured["query"]
+    assert "Lead with premium skincare ritual language" in captured["query"]
+    assert "Current user question: What about the offer?" in captured["query"]
+    assert result.answer
+
+
+def test_rag_agent_builds_company_aware_web_search_query() -> None:
+    query = RAGMarketingKnowledgeAgent._build_web_search_query(
+        "Create a LinkedIn publication for this company.",
+        company_name="HubSpot",
+        company_website="https://www.hubspot.com",
+        conversation_history=[
+            ConversationTurn(role="user", content="I want publication ideas for HubSpot."),
+        ],
+    )
+
+    assert 'Company name: "HubSpot".' in query
+    assert "Website domain: hubspot.com." in query
+    assert "site:hubspot.com" in query
+    assert "publication ideas" in query.lower()

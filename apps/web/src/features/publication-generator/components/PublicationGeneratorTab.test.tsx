@@ -15,10 +15,13 @@ beforeEach(() => {
 });
 
 test("renders campaign draft output alongside the publication package", async () => {
-  fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+  let assistantBody: Record<string, unknown> | null = null;
+
+  fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
 
     if (url.endsWith("/api/v1/assistant/run")) {
+      assistantBody = JSON.parse(String(init?.body ?? "{}"));
       return new Response(
         JSON.stringify({
           intent: "generate_publication",
@@ -96,6 +99,14 @@ test("renders campaign draft output alongside the publication package", async ()
 
   render(<PublicationGeneratorTab />);
 
+  fireEvent.change(screen.getByLabelText(/Company Name/i), {
+    target: { value: "HubSpot" },
+  });
+  fireEvent.change(screen.getByLabelText(/Company Website/i), {
+    target: { value: "https://www.hubspot.com" },
+  });
+  fireEvent.click(screen.getByRole("checkbox", { name: /Use live web research for the company/i }));
+
   fireEvent.click(screen.getByRole("button", { name: /Generate Publication/i }));
 
   await waitFor(() => {
@@ -106,4 +117,9 @@ test("renders campaign draft output alongside the publication package", async ()
   expect(screen.getByText(/Sharper campaign launches for lean teams/i)).toBeTruthy();
   expect(screen.getByText(/Ready-to-publish copy/i)).toBeTruthy();
   expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(assistantBody).toMatchObject({
+    company_name: "HubSpot",
+    company_website: "https://www.hubspot.com",
+    use_web_search: true,
+  });
 });

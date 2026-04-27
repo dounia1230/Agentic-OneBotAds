@@ -7,17 +7,23 @@ import type {
 
 export type PublicationFormValues = {
   productName: string;
+  companyName: string;
+  companyWebsite: string;
   platform: string;
   audience: string;
   goal: string;
+  useCompanyResearch: boolean;
   generateImage: boolean;
 };
 
 export const defaultPublicationForm: PublicationFormValues = {
   productName: "Agentic OneBotAds",
+  companyName: "",
+  companyWebsite: "",
   platform: "LinkedIn",
   audience: "SMEs and marketing teams",
   goal: "Increase qualified demo bookings",
+  useCompanyResearch: false,
   generateImage: true,
 };
 
@@ -36,12 +42,23 @@ function buildHashtags(productName: string, platform: string): string[] {
 export function buildPublicationRequestMessage(form: PublicationFormValues): string {
   return [
     `Create a ${form.platform} publication for ${form.productName}.`,
+    form.companyName
+      ? `Base the publication on current public information about ${form.companyName}.`
+      : null,
+    form.companyWebsite
+      ? `Company website: ${form.companyWebsite}.`
+      : null,
     `Target audience: ${form.audience}.`,
     `Goal: ${form.goal}.`,
+    form.useCompanyResearch
+      ? "Use live company web research to ground the publication ideas."
+      : "Use only the existing private knowledge base and request context.",
     form.generateImage
       ? "Create the image for the publication if the backend stack allows it."
       : "Text-only output is fine.",
-  ].join(" ");
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(" ");
 }
 
 export function buildCampaignDraftPayload(form: PublicationFormValues): CampaignBrief {
